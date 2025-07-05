@@ -1,5 +1,5 @@
 """
-KoBERT 개인정보 문맥 이해 테스트
+KoBERT 개인정보 문맥 이해 테스트 (이모지 수정본)
 """
 
 import torch
@@ -11,16 +11,16 @@ def test_kobert_installation():
     try:
         from kobert import get_pytorch_kobert_model, get_tokenizer_path
         from gluonnlp.data import SentencepieceTokenizer
-        print("✅ KoBERT 라이브러리 import 성공!")
+        print("[성공] KoBERT 라이브러리 import 성공!")
         return True
     except ImportError as e:
-        print(f"❌ KoBERT import 실패: {e}")
+        print("[실패] KoBERT import 실패: {}".format(e))
         return False
 
 def load_kobert_model():
     """KoBERT 모델 로딩"""
     try:
-        print("🔄 KoBERT 모델 로딩 중...")
+        print("[로딩] KoBERT 모델 로딩 중...")
         start_time = time.time()
 
         from kobert import get_pytorch_kobert_model, get_tokenizer_path
@@ -33,16 +33,16 @@ def load_kobert_model():
         tokenizer = SentencepieceTokenizer(tok_path)
 
         load_time = time.time() - start_time
-        print(f"✅ KoBERT 모델 로딩 완료! (소요시간: {load_time:.2f}초)")
+        print("[성공] KoBERT 모델 로딩 완료! (소요시간: {:.2f}초)".format(load_time))
 
         return model, vocab, tokenizer
     except Exception as e:
-        print(f"❌ KoBERT 모델 로딩 실패: {e}")
+        print("[실패] KoBERT 모델 로딩 실패: {}".format(e))
         return None, None, None
 
 def test_tokenization(tokenizer):
     """토크나이징 테스트"""
-    print("\n🔤 토크나이징 테스트")
+    print("\n[토큰] 토크나이징 테스트")
     print("-" * 50)
 
     test_sentences = [
@@ -54,8 +54,8 @@ def test_tokenization(tokenizer):
 
     for sentence in test_sentences:
         tokens = tokenizer(sentence)
-        print(f"원문: {sentence}")
-        print(f"토큰: {tokens}")
+        print("원문: {}".format(sentence))
+        print("토큰: {}".format(tokens))
         print()
 
 def get_sentence_embedding(model, vocab, tokenizer, text):
@@ -89,7 +89,7 @@ def get_sentence_embedding(model, vocab, tokenizer, text):
 
 def test_similarity(model, vocab, tokenizer):
     """문맥 유사도 테스트"""
-    print("\n🔍 문맥 유사도 테스트")
+    print("\n[유사도] 문맥 유사도 테스트")
     print("-" * 50)
 
     test_pairs = [
@@ -107,28 +107,28 @@ def test_similarity(model, vocab, tokenizer):
             # 코사인 유사도
             similarity = torch.cosine_similarity(emb1, emb2, dim=0).item()
 
-            print(f"📊 {desc}")
-            print(f"  텍스트1: {text1}")
-            print(f"  텍스트2: {text2}")
-            print(f"  유사도: {similarity:.4f}")
+            print("[분석] {}".format(desc))
+            print("  텍스트1: {}".format(text1))
+            print("  텍스트2: {}".format(text2))
+            print("  유사도: {:.4f}".format(similarity))
 
             if similarity > 0.8:
-                print("  🔴 매우 유사")
+                print("  [높음] 매우 유사")
             elif similarity > 0.6:
-                print("  🟡 어느정도 유사")
+                print("  [중간] 어느정도 유사")
             elif similarity > 0.4:
-                print("  🟢 약간 유사")
+                print("  [낮음] 약간 유사")
             else:
-                print("  🔵 낮은 유사도")
+                print("  [매우낮음] 낮은 유사도")
             print()
 
         except Exception as e:
-            print(f"  ❌ 오류: {e}")
+            print("  [오류] 오류: {}".format(e))
             print()
 
 def test_privacy_detection(model, vocab, tokenizer):
     """개인정보 감지 성능 테스트"""
-    print("\n🛡️ 개인정보 감지 성능 테스트")
+    print("\n[개인정보] 개인정보 감지 성능 테스트")
     print("-" * 50)
 
     test_cases = [
@@ -160,31 +160,31 @@ def test_privacy_detection(model, vocab, tokenizer):
             if any(keyword in text for keyword in ['세', '강남구', '거주']):
                 privacy_score += 0.1
 
-            print(f"📝 {category}")
-            print(f"  텍스트: {text}")
-            print(f"  예상 위험도: {expected_risk}")
-            print(f"  계산된 점수: {privacy_score:.2f}")
-            print(f"  임베딩 차원: {embedding.shape}")
+            print("[테스트] {}".format(category))
+            print("  텍스트: {}".format(text))
+            print("  예상 위험도: {}".format(expected_risk))
+            print("  계산된 점수: {:.2f}".format(privacy_score))
+            print("  임베딩 차원: {}".format(embedding.shape))
             print()
 
         except Exception as e:
-            print(f"  ❌ 오류: {e}")
+            print("  [오류] 오류: {}".format(e))
             print()
 
 def main():
     """메인 테스트 함수"""
-    print("🧪 KoBERT 개인정보 감지 테스트 시작")
+    print("[시작] KoBERT 개인정보 감지 테스트 시작")
     print("=" * 60)
 
     # 1. 설치 확인
     if not test_kobert_installation():
-        print("❌ KoBERT 설치를 확인해주세요.")
+        print("[실패] KoBERT 설치를 확인해주세요.")
         sys.exit(1)
 
     # 2. 모델 로딩
     model, vocab, tokenizer = load_kobert_model()
     if model is None:
-        print("❌ 모델 로딩 실패")
+        print("[실패] 모델 로딩 실패")
         sys.exit(1)
 
     # 3. 토크나이징 테스트
@@ -197,19 +197,19 @@ def main():
     test_privacy_detection(model, vocab, tokenizer)
 
     print("\n" + "=" * 60)
-    print("📋 KoBERT 테스트 결과 요약")
+    print("[요약] KoBERT 테스트 결과 요약")
     print("=" * 60)
-    print("✅ 확인된 기능:")
+    print("[성공] 확인된 기능:")
     print("  - 한국어 토크나이징")
     print("  - 문장 임베딩 생성")
     print("  - 기본적인 문맥 이해")
     print()
-    print("❓ 추가 개발 필요:")
+    print("[개선] 추가 개발 필요:")
     print("  - 개인정보 특화 분류기")
     print("  - 조합 위험도 계산 알고리즘")
     print("  - 도메인별 민감정보 패턴")
     print()
-    print("🎯 결론: KoBERT는 기본 문맥 이해가 가능하며,")
+    print("[결론] 결론: KoBERT는 기본 문맥 이해가 가능하며,")
     print("       개인정보 감지용 fine-tuning을 통해 활용 가능")
 
 if __name__ == "__main__":

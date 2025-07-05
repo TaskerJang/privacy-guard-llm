@@ -1,12 +1,10 @@
 """
-의료 도메인 개인정보 감지 테스트
-Healthcare Domain Privacy Detection Test
+의료 도메인 개인정보 감지 테스트 (이모지 수정본)
+Healthcare Domain Privacy Detection Test (Emoji-Fixed Version)
 """
 
-import torch
-import time
-import sys
 import re
+import time
 from typing import Dict, List, Tuple, Optional
 
 class MedicalPrivacyDetector:
@@ -14,14 +12,23 @@ class MedicalPrivacyDetector:
 
     def __init__(self):
         self.medical_patterns = {
-            'patient_id': r'환자번호|환자ID|Patient ID|차트번호',
-            'medical_record': r'의무기록|차트|카르테',
-            'diagnosis': r'진단|병명|질환',
-            'treatment': r'치료|수술|처방|투약',
-            'lab_values': r'혈당|혈압|콜레스테롤|크레아티닌|헤모글로빈',
-            'personal_health': r'임신|출산|수술력|가족력|알레르기',
-            'medical_facility': r'병원|의원|클리닉|센터',
-            'medical_staff': r'의사|간호사|간호장|의료진|주치의'
+            'patient_id': r'환자번호|환자ID|Patient ID|차트번호|등록번호',
+            'medical_record': r'의무기록|차트|카르테|진료기록',
+            'diagnosis': r'진단받|병명|질환명|진단명',
+            'treatment': r'수술|처방받|투약|치료받|입원',
+            'lab_values': r'혈당\s*\d+|혈압\s*\d+|콜레스테롤\s*\d+|크레아티닌\s*\d+',
+            'personal_health': r'임신\s*\d+주|출산|수술력|가족력|알레르기',
+            'medical_facility': r'병원|의원|클리닉|센터|응급실',
+            'medical_staff': r'의사|간호사|간호장|의료진|주치의|교수님'
+        }
+
+        # 개인정보 패턴
+        self.privacy_patterns = {
+            'name': r'[가-힣]{2,4}(?=\s|님|씨|$)',
+            'phone': r'010-\d{4}-\d{4}',
+            'age': r'\d{1,2}세|\d{1,2}살',
+            'gender': r'남성|여성|남자|여자',
+            'location': r'[가-힣]+구|[가-힣]+동|[가-힣]+시'
         }
 
     def detect_medical_entities(self, text: str) -> Dict[str, List[str]]:
@@ -35,51 +42,76 @@ class MedicalPrivacyDetector:
 
         return entities
 
-    def calculate_medical_risk_score(self, text: str, entities: Dict[str, List[str]]) -> float:
+    def detect_privacy_entities(self, text: str) -> Dict[str, List[str]]:
+        """개인정보 개체 감지"""
+        entities = {}
+
+        for category, pattern in self.privacy_patterns.items():
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            if matches:
+                entities[category] = matches
+
+        return entities
+
+    def calculate_medical_risk_score(self, text: str, medical_entities: Dict[str, List[str]],
+                                     privacy_entities: Dict[str, List[str]]) -> float:
         """의료 정보 위험도 계산"""
         risk_score = 0.0
 
-        # 기본 의료 정보 위험도
-        risk_weights = {
-            'patient_id': 0.9,
-            'medical_record': 0.8,
-            'diagnosis': 0.7,
-            'treatment': 0.6,
-            'lab_values': 0.5,
-            'personal_health': 0.8,
-            'medical_facility': 0.3,
-            'medical_staff': 0.4
+        # 의료 정보 위험도 가중치
+        medical_weights = {
+            'patient_id': 0.4,
+            'medical_record': 0.3,
+            'diagnosis': 0.2,
+            'treatment': 0.2,
+            'lab_values': 0.1,
+            'personal_health': 0.3,
+            'medical_facility': 0.05,
+            'medical_staff': 0.1
         }
 
-        for category, items in entities.items():
-            if category in risk_weights:
-                risk_score += risk_weights[category] * len(items)
+        # 개인정보 위험도 가중치
+        privacy_weights = {
+            'name': 0.3,
+            'phone': 0.4,
+            'age': 0.1,
+            'gender': 0.05,
+            'location': 0.1
+        }
 
-        # 개인 식별 정보 추가 점수
-        if re.search(r'[가-힣]{2,3}(?=\s|$)', text):  # 한국 이름 패턴
-            risk_score += 0.6
+        # 의료 정보 점수 계산
+        for category, items in medical_entities.items():
+            if category in medical_weights:
+                risk_score += medical_weights[category] * len(items)
 
-        if re.search(r'010-\d{4}-\d{4}', text):  # 전화번호
-            risk_score += 0.8
+        # 개인정보 점수 계산
+        for category, items in privacy_entities.items():
+            if category in privacy_weights:
+                risk_score += privacy_weights[category] * len(items)
 
-        if re.search(r'\d{1,2}세|\d{1,2}살', text):  # 나이
-            risk_score += 0.3
+        # 조합 위험도 계산
+        combination_bonus = 0.0
 
-        # 조합 위험도 (나이 + 성별 + 의료정보)
-        age_gender_medical = (
-                bool(re.search(r'\d{1,2}세|\d{1,2}살', text)) and
-                bool(re.search(r'남성|여성|남자|여자', text)) and
-                bool(entities)
-        )
+        # 개인정보 + 의료정보 조합
+        if privacy_entities and medical_entities:
+            combination_bonus += 0.2
 
-        if age_gender_medical:
-            risk_score += 0.5
+        # 나이 + 성별 + 의료정보 조합
+        if ('age' in privacy_entities and 'gender' in privacy_entities and
+                medical_entities):
+            combination_bonus += 0.1
+
+        # 이름 + 의료정보 조합
+        if 'name' in privacy_entities and medical_entities:
+            combination_bonus += 0.2
+
+        risk_score += combination_bonus
 
         return min(risk_score, 1.0)  # 최대 1.0으로 제한
 
 def test_medical_privacy_detection():
     """의료 도메인 개인정보 감지 테스트"""
-    print("🏥 의료 도메인 개인정보 감지 테스트")
+    print("[의료] 의료 도메인 개인정보 감지 테스트")
     print("=" * 60)
 
     detector = MedicalPrivacyDetector()
@@ -161,19 +193,20 @@ def test_medical_privacy_detection():
         }
     ]
 
-    print(f"📊 총 {len(test_cases)}개 테스트 케이스 실행\n")
+    print("[정보] 총 {}개 테스트 케이스 실행\n".format(len(test_cases)))
 
     results = []
 
     for i, case in enumerate(test_cases, 1):
-        print(f"🧪 테스트 {i}: {case['description']}")
-        print(f"   텍스트: {case['text']}")
+        print("[테스트] 테스트 {}: {}".format(i, case['description']))
+        print("   텍스트: {}".format(case['text']))
 
         # 의료 개체 감지
-        entities = detector.detect_medical_entities(case['text'])
+        medical_entities = detector.detect_medical_entities(case['text'])
+        privacy_entities = detector.detect_privacy_entities(case['text'])
 
         # 위험도 계산
-        risk_score = detector.calculate_medical_risk_score(case['text'], entities)
+        risk_score = detector.calculate_medical_risk_score(case['text'], medical_entities, privacy_entities)
 
         # 위험도 분류
         if risk_score >= 0.8:
@@ -188,16 +221,18 @@ def test_medical_privacy_detection():
             calculated_risk = 'NONE'
 
         # 감지된 개체 출력
-        if entities:
-            print(f"   감지된 의료 개체: {entities}")
+        if medical_entities:
+            print("   의료 개체: {}".format(medical_entities))
+        if privacy_entities:
+            print("   개인정보 개체: {}".format(privacy_entities))
 
-        print(f"   위험도 점수: {risk_score:.3f}")
-        print(f"   예상 위험도: {case['expected_risk']}")
-        print(f"   계산된 위험도: {calculated_risk}")
+        print("   위험도 점수: {:.3f}".format(risk_score))
+        print("   예상 위험도: {}".format(case['expected_risk']))
+        print("   계산된 위험도: {}".format(calculated_risk))
 
         # 결과 평가
         is_correct = calculated_risk == case['expected_risk']
-        print(f"   결과: {'✅ 정확' if is_correct else '❌ 불일치'}")
+        print("   결과: {}".format('[성공] 정확' if is_correct else '[실패] 불일치'))
 
         results.append({
             'case': i,
@@ -210,16 +245,16 @@ def test_medical_privacy_detection():
         print("-" * 60)
 
     # 전체 결과 분석
-    print("\n📈 테스트 결과 분석")
+    print("\n[분석] 테스트 결과 분석")
     print("=" * 60)
 
     total_cases = len(results)
     correct_cases = sum(1 for r in results if r['correct'])
     accuracy = correct_cases / total_cases * 100
 
-    print(f"전체 테스트 케이스: {total_cases}")
-    print(f"정확한 예측: {correct_cases}")
-    print(f"정확도: {accuracy:.1f}%")
+    print("전체 테스트 케이스: {}".format(total_cases))
+    print("정확한 예측: {}".format(correct_cases))
+    print("정확도: {:.1f}%".format(accuracy))
 
     # 위험도별 분석
     risk_levels = ['NONE', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
@@ -228,22 +263,22 @@ def test_medical_privacy_detection():
         correct_count = sum(1 for r in results if r['expected'] == level and r['correct'])
         if expected_count > 0:
             level_accuracy = correct_count / expected_count * 100
-            print(f"{level} 위험도: {correct_count}/{expected_count} ({level_accuracy:.1f}%)")
+            print("{} 위험도: {}/{} ({:.1f}%)".format(level, correct_count, expected_count, level_accuracy))
 
-    print("\n🎯 의료 도메인 특화 분석")
+    print("\n[목표] 의료 도메인 특화 분석")
     print("=" * 60)
 
     # 오분류 사례 분석
     incorrect_cases = [r for r in results if not r['correct']]
     if incorrect_cases:
-        print("❌ 오분류 사례:")
+        print("[실패] 오분류 사례:")
         for case in incorrect_cases:
             test_case = test_cases[case['case'] - 1]
-            print(f"  - 케이스 {case['case']}: {test_case['description']}")
-            print(f"    예상: {case['expected']} → 계산: {case['calculated']}")
+            print("  - 케이스 {}: {}".format(case['case'], test_case['description']))
+            print("    예상: {} -> 계산: {}".format(case['expected'], case['calculated']))
 
     # 개선 제안
-    print("\n🔧 개선 제안:")
+    print("\n[개선] 개선 제안:")
     print("1. 의료 용어 사전 확장")
     print("2. 문맥 기반 위험도 가중치 조정")
     print("3. 의료진 vs 환자 구분 로직 개선")
@@ -254,11 +289,10 @@ def test_medical_privacy_detection():
 
 def test_medical_nlp_integration():
     """의료 NLP 통합 테스트"""
-    print("\n🧠 의료 NLP 통합 테스트")
+    print("\n[NLP] 의료 NLP 통합 테스트")
     print("=" * 60)
 
-    # 실제 프로덕션에서는 KoBERT 등의 모델을 사용
-    print("📝 의료 도메인 NLP 기능 테스트:")
+    print("[기능] 의료 도메인 NLP 기능 테스트:")
     print("1. 의료 용어 인식")
     print("2. 개인정보 패턴 매칭")
     print("3. 문맥 기반 위험도 계산")
@@ -284,29 +318,31 @@ def test_medical_nlp_integration():
     detector = MedicalPrivacyDetector()
 
     for i, case in enumerate(complex_cases, 1):
-        print(f"\n🔍 복잡한 시나리오 {i}:")
-        print(f"텍스트: {case['text']}")
-        print(f"분석: {case['analysis']}")
+        print("\n[시나리오] 복잡한 시나리오 {}:".format(i))
+        print("텍스트: {}".format(case['text']))
+        print("분석: {}".format(case['analysis']))
 
-        entities = detector.detect_medical_entities(case['text'])
-        risk_score = detector.calculate_medical_risk_score(case['text'], entities)
+        medical_entities = detector.detect_medical_entities(case['text'])
+        privacy_entities = detector.detect_privacy_entities(case['text'])
+        risk_score = detector.calculate_medical_risk_score(case['text'], medical_entities, privacy_entities)
 
-        print(f"감지된 개체: {entities}")
-        print(f"위험도 점수: {risk_score:.3f}")
+        print("의료 개체: {}".format(medical_entities))
+        print("개인정보 개체: {}".format(privacy_entities))
+        print("위험도 점수: {:.3f}".format(risk_score))
 
         # 상세 분석
         if risk_score >= 0.8:
-            print("⚠️ 매우 높은 위험도 - 즉시 마스킹 필요")
+            print("[위험] 매우 높은 위험도 - 즉시 마스킹 필요")
         elif risk_score >= 0.6:
-            print("🔴 높은 위험도 - 신중한 검토 필요")
+            print("[주의] 높은 위험도 - 신중한 검토 필요")
         elif risk_score >= 0.3:
-            print("🟡 중간 위험도 - 주의 필요")
+            print("[경고] 중간 위험도 - 주의 필요")
         else:
-            print("🟢 낮은 위험도 - 상대적으로 안전")
+            print("[안전] 낮은 위험도 - 상대적으로 안전")
 
 def main():
     """메인 테스트 실행"""
-    print("🏥 의료 도메인 개인정보 감지 테스트 시작")
+    print("[시작] 의료 도메인 개인정보 감지 테스트 시작")
     print("=" * 80)
 
     start_time = time.time()
@@ -321,26 +357,26 @@ def main():
     end_time = time.time()
     execution_time = end_time - start_time
 
-    print(f"\n⏱️ 테스트 실행 시간: {execution_time:.2f}초")
+    print("\n[성능] 테스트 실행 시간: {:.2f}초".format(execution_time))
 
     # 4. 최종 결과 요약
-    print("\n📋 최종 테스트 결과")
+    print("\n[요약] 최종 테스트 결과")
     print("=" * 80)
 
     total_tests = len(results)
     correct_tests = sum(1 for r in results if r['correct'])
     accuracy = correct_tests / total_tests * 100
 
-    print(f"✅ 전체 정확도: {accuracy:.1f}% ({correct_tests}/{total_tests})")
-    print(f"⚡ 평균 처리 시간: {execution_time/total_tests:.3f}초/케이스")
+    print("[성공] 전체 정확도: {:.1f}% ({}/{})".format(accuracy, correct_tests, total_tests))
+    print("[성능] 평균 처리 시간: {:.3f}초/케이스".format(execution_time/total_tests))
 
-    print("\n🎯 의료 도메인 특화 성능:")
+    print("\n[특화] 의료 도메인 특화 성능:")
     print("- 환자 개인정보 감지: 높음")
     print("- 의료진 정보 구분: 중간")
     print("- 의료 수치 인식: 높음")
     print("- 조합 위험도 평가: 중간")
 
-    print("\n🔄 다음 단계:")
+    print("\n[다음] 다음 단계:")
     print("1. KoBERT/KoELECTRA 모델 통합")
     print("2. 의료 용어 사전 확장")
     print("3. 실제 의료 데이터로 성능 검증")
