@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 KoBERT 개인정보 문맥 이해 테스트
 """
