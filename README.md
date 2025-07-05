@@ -116,6 +116,71 @@ run_all_tests.bat
 - [ ] ChatGPT/Claude 연동
 - [ ] 실시간 필터링 시스템
 
+## 🧪 Privacy Guard LLM - 5개 모델 개별 테스트
+
+### 1. KoBERT 테스트
+```cmd
+cd envs\kobert_env
+call Scripts\activate.bat
+python ..\..\tests\test_kobert.py
+call Scripts\deactivate.bat
+cd ..\..
+```
+
+### 2. BERT 테스트
+```cmd
+cd envs\bert_env
+call Scripts\activate.bat
+python ..\..\tests\test_bert.py
+call Scripts\deactivate.bat
+cd ..\..
+```
+
+### 3. RoBERTa 테스트
+```cmd
+cd envs\roberta_env
+call Scripts\activate.bat
+python ..\..\tests\test_roberta.py
+call Scripts\deactivate.bat
+cd ..\..
+```
+
+### 4. KoELECTRA 테스트
+```cmd
+cd envs\koelectra_env
+call Scripts\activate.bat
+python ..\..\tests\test_koelectra.py
+call Scripts\deactivate.bat
+cd ..\..
+```
+
+### 5. 기존 도구들 테스트
+```cmd
+cd envs\existing_tools_env
+call Scripts\activate.bat
+python ..\..\tests\test_existing.py
+call Scripts\deactivate.bat
+cd ..\..
+```
+
+### 6. 결과 통합 분석 (선택사항)
+```cmd
+python compare_all.py
+```
+
+### 7. 결과 확인
+```cmd
+# 개별 결과 확인
+type results\kobert_results.txt
+type results\bert_results.txt
+type results\roberta_results.txt
+type results\koelectra_results.txt
+type results\existing_results.txt
+
+# 통합 분석 결과 확인
+type results\comparison_summary.txt
+```
+
 ## 🤝 Contributing
 
 1. Fork the Project
