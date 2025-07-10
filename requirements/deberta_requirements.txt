@@ -1,0 +1,48 @@
+# DeBERTa v3 Korean Environment Dependencies
+# For team-lucid/deberta-v3-base-korean model testing
+
+# Core libraries (latest versions recommended)
+torch>=1.11.0
+transformers>=4.21.0
+tokenizers>=0.13.0
+
+# DeBERTa v3 requires newer transformers version
+
+# Data processing and analysis
+numpy>=1.21.0
+pandas>=1.4.0
+scipy>=1.7.0
+
+# Text processing (Korean)
+sentencepiece>=0.1.96
+konlpy>=0.6.0
+
+# Machine learning and evaluation
+scikit-learn>=1.1.0
+matplotlib>=3.5.0
+seaborn>=0.11.0
+
+# Performance and progress tracking
+tqdm>=4.64.0
+requests>=2.27.0
+
+# Advanced statistical analysis for DeBERTa v3
+statsmodels>=0.13.0
+
+# Memory optimization (optional)
+# DeBERTa v3 uses more memory
+# accelerate>=0.12.0
+
+# Korean language specific processing (optional)
+# soynlp>=0.0.493
+# kss>=4.0.0
+# kiwipiepy>=0.14.0
+
+# Advanced visualization (optional)
+# plotly>=5.0.0
+# wordcloud>=1.8.0
+
+# Development/debugging (optional)
+# jupyter>=1.0.0
+# ipython>=8.0.0
+# memory_profiler>=0.60.0
