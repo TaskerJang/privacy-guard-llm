@@ -1,19 +1,35 @@
-// popup.js - 수정된 버전 (서버 상태 및 모델 정보 표시)
+// popup.js
 
-document.addEventListener('DOMContentLoaded', function() {
-    const mainToggle = document.getElementById('mainToggle');
+// 메시지 전송 헬퍼 (콜백 기반)
+function sendMessage(message, onSuccess, onError) {
+    chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+        const tab = tabs[0];
+        if (!tab || !tab.id) {
+            onError?.(new Error('활성 탭을 찾을 수 없습니다.'));
+            return;
+        }
+        chrome.tabs.sendMessage(tab.id, message, response => {
+            if (chrome.runtime.lastError) {
+                onError?.(chrome.runtime.lastError);
+            } else {
+                onSuccess?.(response);
+            }
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const mainToggle      = document.getElementById('mainToggle');
     const thresholdSlider = document.getElementById('threshold');
-    const thresholdValue = document.getElementById('thresholdValue');
-    const analysisMode = document.getElementById('analysisMode');
-    const scanButton = document.getElementById('scanButton');
-    const clearButton = document.getElementById('clearButton');
-    const stats = document.getElementById('stats');
+    const thresholdValue  = document.getElementById('thresholdValue');
+    const analysisMode    = document.getElementById('analysisMode');
+    const scanButton      = document.getElementById('scanButton');
+    const clearButton     = document.getElementById('clearButton');
+    const stats           = document.getElementById('stats');
 
-    // 🔥 새로운 UI 요소들
     let serverStatusIndicator;
     let modelInfo;
 
-    // 초기화
     init();
 
     function init() {
@@ -23,393 +39,223 @@ document.addEventListener('DOMContentLoaded', function() {
         setupEventListeners();
     }
 
-    // 🔥 새로운 기능: 서버 상태 UI 생성
+    // 서버 상태 UI 생성
     function createServerStatusUI() {
-        // 서버 상태 표시기 추가
-        const container = document.querySelector('.container');
+        const header = document.querySelector('.header');
         const serverSection = document.createElement('div');
         serverSection.className = 'server-section';
         serverSection.innerHTML = `
-            <div class="server-status">
-                <div class="server-indicator" id="serverIndicator">
-                    <div class="status-dot"></div>
-                    <span class="status-text">서버 상태 확인 중...</span>
-                </div>
-                <button class="reconnect-btn" id="reconnectBtn" style="display: none;">🔄 재연결</button>
-            </div>
-            <div class="model-info" id="modelInfo" style="display: none;">
-                <div class="model-name"></div>
-                <div class="model-details"></div>
-            </div>
-        `;
-
-        // 헤더 다음에 삽입
-        const header = document.querySelector('.header');
+      <div class="server-status">
+        <div class="server-indicator" id="serverIndicator">
+          <div class="status-dot"></div>
+          <span class="status-text">서버 상태 확인 중...</span>
+        </div>
+        <button class="reconnect-btn" id="reconnectBtn" style="display: none;">🔄 재연결</button>
+      </div>
+      <div class="model-info" id="modelInfo" style="display: none;">
+        <div class="model-name"></div>
+        <div class="model-details"></div>
+      </div>
+    `;
         header.insertAdjacentElement('afterend', serverSection);
 
-        // 스타일 추가
-        const style = document.createElement('style');
-        style.textContent = `
-            .server-section {
-                background: #f8f9fa;
-                border-radius: 8px;
-                padding: 15px;
-                margin-bottom: 20px;
-                border: 1px solid #dee2e6;
-            }
-            
-            .server-status {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                margin-bottom: 10px;
-            }
-            
-            .server-indicator {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-            }
-            
-            .status-dot {
-                width: 8px;
-                height: 8px;
-                border-radius: 50%;
-                background: #6c757d;
-                animation: pulse 2s infinite;
-            }
-            
-            .status-dot.connected {
-                background: #28a745;
-            }
-            
-            .status-dot.disconnected {
-                background: #dc3545;
-            }
-            
-            .status-text {
-                font-size: 12px;
-                color: #495057;
-                font-weight: 500;
-            }
-            
-            .reconnect-btn {
-                background: #007bff;
-                color: white;
-                border: none;
-                padding: 4px 8px;
-                border-radius: 4px;
-                font-size: 11px;
-                cursor: pointer;
-            }
-            
-            .reconnect-btn:hover {
-                background: #0056b3;
-            }
-            
-            .model-info {
-                font-size: 11px;
-                color: #6c757d;
-                border-top: 1px solid #dee2e6;
-                padding-top: 8px;
-            }
-            
-            .model-name {
-                font-weight: 600;
-                color: #495057;
-            }
-            
-            .model-details {
-                margin-top: 2px;
-            }
-            
-            @keyframes pulse {
-                0%, 100% { opacity: 1; }
-                50% { opacity: 0.5; }
-            }
-        `;
-        document.head.appendChild(style);
-
-        // 참조 저장
         serverStatusIndicator = document.getElementById('serverIndicator');
-        modelInfo = document.getElementById('modelInfo');
-
-        // 재연결 버튼 이벤트
+        modelInfo             = document.getElementById('modelInfo');
         document.getElementById('reconnectBtn').addEventListener('click', handleReconnect);
     }
 
+    // 각종 이벤트 등록
     function setupEventListeners() {
-        // 토글 스위치
+        // 보호 기능 토글
         mainToggle.addEventListener('click', function() {
             this.classList.toggle('active');
-            const isActive = this.classList.contains('active');
             saveSettings();
-
-            chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-                chrome.tabs.sendMessage(tabs[0].id, {
-                    action: 'toggleProtection',
-                    enabled: isActive
-                });
-            });
+            sendMessage(
+                { action: 'toggleProtection', enabled: this.classList.contains('active') },
+                () => {},
+                () => {}
+            );
         });
 
-        // 임계값 슬라이더
+        // 임계값 변경
         thresholdSlider.addEventListener('input', function() {
             thresholdValue.textContent = this.value;
             saveSettings();
-
-            chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-                chrome.tabs.sendMessage(tabs[0].id, {
-                    action: 'updateSettings',
-                    threshold: parseInt(thresholdSlider.value),
-                    mode: analysisMode.value
-                });
-            });
+            sendMessage(
+                { action: 'updateSettings', threshold: +this.value, mode: analysisMode.value },
+                () => {},
+                () => {}
+            );
         });
 
         // 분석 모드 변경
         analysisMode.addEventListener('change', function() {
             saveSettings();
-            chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-                chrome.tabs.sendMessage(tabs[0].id, {
-                    action: 'updateSettings',
-                    threshold: parseInt(thresholdSlider.value),
-                    mode: this.value
-                });
-            });
+            sendMessage(
+                { action: 'updateSettings', threshold: +thresholdSlider.value, mode: this.value },
+                () => {},
+                () => {}
+            );
         });
 
         // 스캔 버튼
-        scanButton.addEventListener('click', async function() {
+        scanButton.addEventListener('click', function() {
             this.textContent = '🔄 스캔 중...';
-            this.disabled = true;
+            this.disabled    = true;
 
-            try {
-                const tabs = await chrome.tabs.query({active: true, currentWindow: true});
-                const response = await chrome.tabs.sendMessage(tabs[0].id, {action: 'scanPage'});
-
-                if (response && response.success) {
-                    updateStats(response.stats);
-                    stats.classList.add('show');
-
-                    // 🔥 처리 소스 표시
-                    showProcessingSource(response.stats.source);
+            sendMessage(
+                { action: 'scanPage' },
+                response => {
+                    if (response && response.success) {
+                        updateStats(response.stats);
+                        stats.classList.add('show');
+                        showProcessingSource(response.stats.source);
+                    }
+                    scanButton.textContent = '🔍 스캔';
+                    scanButton.disabled    = false;
+                },
+                error => {
+                    console.warn('스캔 실패(리시버 없음):', error.message);
+                    scanButton.textContent = '🔍 스캔';
+                    scanButton.disabled    = false;
                 }
-            } catch (error) {
-                console.error('스캔 오류:', error);
-            } finally {
-                this.textContent = '🔍 스캔';
-                this.disabled = false;
-            }
+            );
         });
 
         // 초기화 버튼
-        clearButton.addEventListener('click', function() {
-            chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-                chrome.tabs.sendMessage(tabs[0].id, {action: 'clearMasking'});
-            });
+        clearButton.addEventListener('click', () => {
+            sendMessage({ action: 'clearMasking' });
             stats.classList.remove('show');
             resetStats();
         });
     }
 
-    // 🔥 새로운 기능: 서버 상태 체크
-    async function checkServerStatus() {
-        try {
-            const tabs = await chrome.tabs.query({active: true, currentWindow: true});
-            const response = await chrome.tabs.sendMessage(tabs[0].id, {action: 'checkServer'});
-
-            if (response && response.success) {
-                updateServerStatus(response.serverStatus);
+    // 서버 상태 확인 (content script 실패 시 HTTP 폴백)
+    function checkServerStatus() {
+        sendMessage(
+            { action: 'checkServer' },
+            res => updateServerStatus(res.serverStatus),
+            () => {
+                fetch('http://localhost:8000/health')
+                    .then(r => r.json())
+                    .then(() => updateServerStatus({ connected: true, endpoint: 'http://localhost:8000' }))
+                    .catch(() => updateServerStatus({ connected: false }));
             }
-        } catch (error) {
-            console.error('서버 상태 체크 실패:', error);
-            updateServerStatus({connected: false, error: error.message});
-        }
+        );
     }
 
-    // 🔥 새로운 기능: 서버 상태 UI 업데이트
-    function updateServerStatus(serverStatus) {
-        const statusDot = serverStatusIndicator.querySelector('.status-dot');
-        const statusText = serverStatusIndicator.querySelector('.status-text');
-        const reconnectBtn = document.getElementById('reconnectBtn');
+    // 서버 상태 UI 업데이트
+    function updateServerStatus(status) {
+        const dot = serverStatusIndicator.querySelector('.status-dot');
+        const txt = serverStatusIndicator.querySelector('.status-text');
+        const btn = document.getElementById('reconnectBtn');
 
-        if (serverStatus.connected) {
-            statusDot.className = 'status-dot connected';
-            statusText.textContent = '🐍 Python 서버 연결됨';
-            reconnectBtn.style.display = 'none';
-
-            // 모델 정보 표시
+        if (status.connected) {
+            dot.className = 'status-dot connected';
+            txt.textContent = '🐍 Python 서버 연결됨';
+            btn.style.display = 'none';
             modelInfo.style.display = 'block';
-            modelInfo.querySelector('.model-name').textContent = 'KoELECTRA + LoRA 모델';
+            modelInfo.querySelector('.model-name').textContent    = 'KoELECTRA + LoRA 모델';
             modelInfo.querySelector('.model-details').textContent =
-                `4단계 파이프라인 • 임계값: ${thresholdSlider.value} • 서버: ${serverStatus.endpoint}`;
+                `임계값 ${thresholdSlider.value} • ${status.endpoint}`;
         } else {
-            statusDot.className = 'status-dot disconnected';
-            statusText.textContent = '⚡ JavaScript 버전 사용';
-            reconnectBtn.style.display = 'inline-block';
-
-            // 모델 정보 표시
+            dot.className = 'status-dot disconnected';
+            txt.textContent = '⚡ JavaScript 버전 사용';
+            btn.style.display = 'inline-block';
             modelInfo.style.display = 'block';
-            modelInfo.querySelector('.model-name').textContent = '간소화된 JavaScript 모델';
+            modelInfo.querySelector('.model-name').textContent    = '간소화된 JS 모델';
             modelInfo.querySelector('.model-details').textContent =
-                `정규식 패턴 매칭 • 임계값: ${thresholdSlider.value} • 오프라인 모드`;
+                `임계값 ${thresholdSlider.value} • 오프라인 모드`;
         }
     }
 
-    // 🔥 새로운 기능: 재연결 처리
-    async function handleReconnect() {
-        const reconnectBtn = document.getElementById('reconnectBtn');
-        const originalText = reconnectBtn.textContent;
-
-        reconnectBtn.textContent = '🔄 연결 중...';
-        reconnectBtn.disabled = true;
-
-        try {
-            // 2초 후 다시 체크
-            setTimeout(async () => {
-                await checkServerStatus();
-                reconnectBtn.textContent = originalText;
-                reconnectBtn.disabled = false;
-            }, 2000);
-        } catch (error) {
-            console.error('재연결 실패:', error);
-            reconnectBtn.textContent = originalText;
-            reconnectBtn.disabled = false;
-        }
-    }
-
-    // 🔥 새로운 기능: 처리 소스 표시
-    function showProcessingSource(source) {
-        const sourceIcon = source === 'python' ? '🐍' : '⚡';
-        const sourceName = source === 'python' ? 'Python KoELECTRA' : 'JavaScript';
-
-        // 임시 알림 표시
-        const notification = document.createElement('div');
-        notification.textContent = `${sourceIcon} ${sourceName} 엔진 사용됨`;
-        notification.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: ${source === 'python' ? '#d4edda' : '#fff3cd'};
-            color: ${source === 'python' ? '#155724' : '#856404'};
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 600;
-            z-index: 10001;
-            animation: fadeInOut 2s ease-in-out;
-        `;
-
-        document.body.appendChild(notification);
-
+    // 재연결 버튼 핸들러
+    function handleReconnect() {
+        const btn = document.getElementById('reconnectBtn');
+        btn.textContent = '🔄 연결 중...';
+        btn.disabled    = true;
         setTimeout(() => {
-            if (notification.parentNode) {
-                notification.remove();
-            }
+            checkServerStatus();
+            btn.textContent = '🔄 재연결';
+            btn.disabled    = false;
         }, 2000);
     }
 
-    // 설정 저장
-    function saveSettings() {
-        const settings = {
-            enabled: mainToggle.classList.contains('active'),
-            threshold: parseInt(thresholdSlider.value),
-            mode: analysisMode.value
-        };
+    // 통계 업데이트
+    function updateStats(data) {
+        document.getElementById('totalEntities').textContent  = data.totalEntities;
+        document.getElementById('maskedEntities').textContent = data.maskedEntities;
+        document.getElementById('avgRisk').textContent         = data.avgRisk + '%';
 
-        chrome.storage.sync.set({ privacyGuardSettings: settings });
+        const existing = document.querySelector('.processing-info');
+        if (existing) existing.remove();
+
+        const info = document.createElement('div');
+        info.className = 'processing-info';
+        info.innerHTML = `
+      <div class="stat-row"><span class="stat-label">처리 시간:</span><span class="stat-value">${data.processingTime || 0}ms</span></div>
+      <div class="stat-row"><span class="stat-label">엔진:</span><span class="stat-value">${data.source === 'python' ? '🐍 Python' : '⚡ JavaScript'}</span></div>
+    `;
+        stats.appendChild(info);
     }
 
-    // 설정 로드
+    // 엔진 사용 알림
+    function showProcessingSource(source) {
+        const icon = source === 'python' ? '🐍' : '⚡';
+        const text = source === 'python' ? 'Python 모델' : 'JavaScript';
+        const note = document.createElement('div');
+        note.textContent = `${icon} ${text} 사용됨`;
+        Object.assign(note.style, {
+            position: 'fixed', top: '50%', left: '50%',
+            transform: 'translate(-50%,-50%)',
+            background: '#fff', padding: '8px 16px', borderRadius: '20px',
+            fontSize: '12px', fontWeight: '600', zIndex: '10000',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+            animation: 'fadeInOut 2s ease-in-out'
+        });
+        document.body.appendChild(note);
+        setTimeout(() => note.remove(), 2000);
+    }
+
+    // 설정 저장/로드
+    function saveSettings() {
+        const s = {
+            enabled:   mainToggle.classList.contains('active'),
+            threshold: +thresholdSlider.value,
+            mode:      analysisMode.value
+        };
+        chrome.storage.sync.set({ privacyGuardSettings: s });
+    }
     function loadSettings() {
-        chrome.storage.sync.get(['privacyGuardSettings'], function(result) {
-            const settings = result.privacyGuardSettings || {
-                enabled: false,
-                threshold: 50,
-                mode: 'medical'
-            };
-
-            if (settings.enabled) {
-                mainToggle.classList.add('active');
-            }
-
-            thresholdSlider.value = settings.threshold;
-            thresholdValue.textContent = settings.threshold;
-            analysisMode.value = settings.mode;
+        chrome.storage.sync.get('privacyGuardSettings', res => {
+            const s = res.privacyGuardSettings || {};
+            if (s.enabled) mainToggle.classList.add('active');
+            thresholdSlider.value  = s.threshold ?? thresholdSlider.value;
+            thresholdValue.textContent = thresholdSlider.value;
+            analysisMode.value     = s.mode || analysisMode.value;
         });
     }
 
-    // 🔥 수정된 통계 업데이트 (소스 정보 포함)
-    function updateStats(statsData) {
-        document.getElementById('totalEntities').textContent = statsData.totalEntities;
-        document.getElementById('maskedEntities').textContent = statsData.maskedEntities;
-        document.getElementById('avgRisk').textContent = statsData.avgRisk + '%';
-
-        // 🔥 처리 시간 및 소스 정보 추가
-        const existingInfo = document.querySelector('.processing-info');
-        if (existingInfo) {
-            existingInfo.remove();
-        }
-
-        const processingInfo = document.createElement('div');
-        processingInfo.className = 'processing-info';
-        processingInfo.innerHTML = `
-            <div class="stat-row">
-                <span class="stat-label">처리 시간:</span>
-                <span class="stat-value">${statsData.processingTime || 0}ms</span>
-            </div>
-            <div class="stat-row">
-                <span class="stat-label">엔진:</span>
-                <span class="stat-value">${statsData.source === 'python' ? '🐍 Python' : '⚡ JavaScript'}</span>
-            </div>
-        `;
-
-        stats.appendChild(processingInfo);
-    }
-
-    // 통계 초기화
+    // 통계 리셋
     function resetStats() {
-        document.getElementById('totalEntities').textContent = '0';
+        document.getElementById('totalEntities').textContent  = '0';
         document.getElementById('maskedEntities').textContent = '0';
-        document.getElementById('avgRisk').textContent = '0%';
-
-        const processingInfo = document.querySelector('.processing-info');
-        if (processingInfo) {
-            processingInfo.remove();
-        }
+        document.getElementById('avgRisk').textContent         = '0%';
+        const pi = document.querySelector('.processing-info');
+        if (pi) pi.remove();
     }
 
-    // 🔥 주기적 서버 상태 체크 (30초마다)
+    // 주기적 상태 체크 & focus 시 체크
     setInterval(checkServerStatus, 30000);
-
-    // 🔥 팝업 열릴 때마다 서버 상태 체크
     window.addEventListener('focus', checkServerStatus);
 });
 
-// 🔥 추가 스타일
-const additionalStyles = document.createElement('style');
-additionalStyles.textContent = `
-    .processing-info {
-        margin-top: 10px;
-        padding-top: 10px;
-        border-top: 1px solid #dee2e6;
-    }
-    
-    .processing-info .stat-row {
-        font-size: 12px;
-        margin: 3px 0;
-    }
-    
-    .processing-info .stat-value {
-        font-size: 12px;
-    }
-    
-    @keyframes fadeInOut {
-        0% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-        50% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-        100% { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-    }
+// 추가 스타일
+const style = document.createElement('style');
+style.textContent = `
+  .processing-info { margin-top:10px; padding-top:10px; border-top:1px solid #dee2e6; }
+  .processing-info .stat-row { font-size:12px; margin:3px 0; }
+  .processing-info .stat-value { font-size:12px; }
+  @keyframes fadeInOut { 0%{opacity:0;transform:translate(-50%,-50%) scale(0.8);}50%{opacity:1;transform:translate(-50%,-50%) scale(1);}100%{opacity:0;transform:translate(-50%,-50%) scale(0.8);} }
 `;
-document.head.appendChild(additionalStyles);
+document.head.appendChild(style);
