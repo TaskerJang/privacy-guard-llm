@@ -17,9 +17,12 @@ class ModelManager:
     """모델 로딩 및 관리 클래스"""
 
     def __init__(self):
+        # 로컬 모델 경로 설정 (상대 경로)
+        self.model_path = "../ner-koelectra-lora-merged"
+
         self.pipeline = None
         self.model_info = {
-            'name': 'KoELECTRA + LoRA',
+            'name': 'KoELECTRA + LoRA (Local)',
             'version': '1.0.0',
             'loaded': False,
             'error': None
@@ -36,10 +39,31 @@ class ModelManager:
 
             logging.info("🔄 Privacy Guard 파이프라인 로딩 중...")
 
-            # 모델 경로 설정 (기본값 또는 더미)
+            # 실제 로컬 모델 경로 사용
             if model_path is None:
-                # 더미 모델로 시연 (실제 모델이 없을 때)
+                model_path = self.model_path  # 로컬 경로 사용
+
+            # 절대 경로로 변환
+            abs_model_path = os.path.abspath(model_path)
+            logging.info(f"🔍 모델 경로 확인: {abs_model_path}")
+
+            # 경로 존재 확인
+            if not os.path.exists(abs_model_path):
+                logging.warning(f"⚠️ 모델 경로 없음: {abs_model_path}")
+                logging.info("🔄 더미 모델로 대체합니다...")
                 model_path = "dummy"
+                abs_model_path = "dummy"
+            else:
+                logging.info(f"✅ 모델 경로 확인됨: {abs_model_path}")
+                # 필수 파일 확인
+                required_files = ['config.json']
+                for file in required_files:
+                    file_path = os.path.join(abs_model_path, file)
+                    if not os.path.exists(file_path):
+                        logging.warning(f"⚠️ 필수 파일 없음: {file_path}")
+                        model_path = "dummy"
+                        abs_model_path = "dummy"
+                        break
 
             self.pipeline = CompleteMedicalDeidentificationPipeline(
                 model_path=model_path,
@@ -50,8 +74,9 @@ class ModelManager:
             self.model_info.update({
                 'loaded': True,
                 'error': None,
-                'model_path': model_path,
-                'threshold': threshold
+                'model_path': abs_model_path,
+                'threshold': threshold,
+                'model_type': 'local' if model_path != 'dummy' else 'dummy'
             })
 
             logging.info("✅ 모델 로드 완료!")
