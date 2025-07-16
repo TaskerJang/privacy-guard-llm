@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Guard LLM 시연 페이지</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f8f9fa;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+            border-radius: 12px;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .demo-section {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .demo-section h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .medical-record {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #2196f3;
+        }
+
+        .patient-info {
+            background: #fff3e0;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #ff9800;
+        }
+
+        .doctor-note {
+            background: #f3e5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #9c27b0;
+        }
+
+        .emergency-info {
+            background: #ffebee;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #f44336;
+        }
+
+        .instructions {
+            background: #e8f5e8;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 30px;
+            border: 1px solid #4caf50;
+        }
+
+        .instructions h3 {
+            color: #2e7d32;
+            margin-bottom: 15px;
+        }
+
+        .instructions ol {
+            margin-left: 20px;
+        }
+
+        .instructions li {
+            margin: 8px 0;
+        }
+
+        .highlight-box {
+            background: #fff9c4;
+            border: 2px dashed #fbc02d;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        .test-scenarios {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .scenario-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+
+        .scenario-card h4 {
+            color: #495057;
+            margin-bottom: 10px;
+        }
+
+        .risk-indicator {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .risk-high { background: #ffebee; color: #c62828; }
+        .risk-medium { background: #fff3e0; color: #ef6c00; }
+        .risk-low { background: #e8f5e8; color: #2e7d32; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>🏥🔒 Privacy Guard LLM</h1>
+        <p>의료 텍스트 비식별화 시연 페이지</p>
+    </div>
+
+    <div class="instructions">
+        <h3>🎬 시연 방법</h3>
+        <ol>
+            <li><strong>브라우저 우상단의 Privacy Guard 아이콘</strong>을 클릭하세요</li>
+            <li><strong>"보호 기능" 토글</strong>을 켜서 활성화하세요</li>
+            <li><strong>"스캔" 버튼</strong>을 눌러 이 페이지의 개인정보를 감지하세요</li>
+            <li>감지된 개인정보가 <span style="background: #ff6b6b; color: white; padding: 2px 8px; border-radius: 12px;">[MASKED]</span> 형태로 마스킹되는 것을 확인하세요</li>
+            <li>임계값을 조정해서 마스킹 수준을 변경해보세요</li>
+        </ol>
+    </div>
+
+    <div class="demo-section">
+        <h2>📋 환자 기록 예시 1</h2>
+        <div class="medical-record">
+            <h4>진료 기록</h4>
+            <p>환자명: 김철수 (42세 남성)</p>
+            <p>진료일: 2023년 10월 15일</p>
+            <p>진료과: 내과</p>
+            <p>담당의: 박영희 교수님</p>
+            <p>진단명: 당뇨병, 고혈압</p>
+            <p>연락처: 010-1234-5678</p>
+            <p>주소: 서울시 강남구 역삼동</p>
+            <p>처방: 메트포르민 500mg, 아모디핀 5mg</p>
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <h2>🏥 병원 진료 기록 2</h2>
+        <div class="patient-info">
+            <h4>입원 환자 정보</h4>
+            <p>환자: 이순신씨가 2023년 9월 20일에 서울대병원 응급실로 내원하였습니다.</p>
+            <p>주소진단: 급성 심근경색 의심으로 흉통을 호소하며 응급실 도착</p>
+            <p>나이: 65세, 성별: 남성</p>
+            <p>보호자 연락처: 010-9876-5432 (배우자 이영희)</p>
+            <p>담당의: 김하늘 심장내과 교수</p>
+            <p>시술: 관상동맥 조영술 시행 예정</p>
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <h2>👩‍⚕️ 의료진 소견서</h2>
+        <div class="doctor-note">
+            <h4>진료 소견</h4>
+            <p>환자 박민수(38세)는 만성 간염으로 인한 간경화 진단을 받았습니다.</p>
+            <p>삼성서울병원에서 정기적인 추적 관찰 중이며, 6개월마다 복부 CT 검사를 시행하고 있습니다.</p>
+            <p>담당의사: 최수진 소화기내과 전문의</p>
+            <p>다음 예약일: 2024년 1월 15일 오후 2시</p>
+            <p>환자 연락처: 010-5555-7777</p>
+            <p>특이사항: B형 간염 보균자, 가족력 있음</p>
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <h2>🚨 응급실 기록</h2>
+        <div class="emergency-info">
+            <h4>응급실 내원 기록</h4>
+            <p>2023년 11월 3일 오전 3시 30분, 정영수(29세 남성)가 교통사고로 연세의료원 응급실에 내원</p>
+            <p>의식 상태: 명료, 활력징후 안정</p>
+            <p>주 호소: 우측 다리 통증 및 부종</p>
+            <p>담당 의료진: 응급의학과 김응급 전문의, 정형외과 박뼈다리 교수 협진</p>
+            <p>보호자: 어머니 정사랑 (010-1111-2222)</p>
+            <p>진단: 우측 경골 골절 의심</p>
+            <p>치료 계획: X-ray 촬영 후 정형외과 입원 예정</p>
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <h2>📊 테스트 시나리오</h2>
+        <div class="test-scenarios">
+            <div class="scenario-card">
+                <h4>개인정보 + 의료정보 조합 <span class="risk-indicator risk-high">고위험</span></h4>
+                <p>환자 홍길동(45세)이 아산병원에서 폐암 수술을 받았습니다. 담당의는 김수술 교수님입니다.</p>
+            </div>
+
+            <div class="scenario-card">
+                <h4>연락처 포함 <span class="risk-indicator risk-high">고위험</span></h4>
+                <p>응급 연락처: 010-9999-8888 (환자 본인), 010-7777-6666 (보호자)</p>
+            </div>
+
+            <div class="scenario-card">
+                <h4>의료진 정보 <span class="risk-indicator risk-medium">중위험</span></h4>
+                <p>김의사 선생님이 오늘 야간 당직을 서십니다. 간호사 박케어님과 함께 근무합니다.</p>
+            </div>
+
+            <div class="scenario-card">
+                <h4>일반 의료 정보 <span class="risk-indicator risk-low">저위험</span></h4>
+                <p>당뇨병 환자는 규칙적인 식사와 운동이 중요합니다. 혈당 관리가 핵심입니다.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <h2>🔬 복잡한 의료 케이스</h2>
+        <div class="highlight-box">
+            <h4>다중 개인정보가 포함된 복합 케이스</h4>
+            <p>환자 신동욱(52세 남성, 010-1122-3344)이 2023년 12월 1일 고려대병원 신경외과에 뇌종양으로 입원했습니다.
+                담당의는 이뇌수술 교수님이며, 수술 예정일은 12월 5일입니다.
+                보호자는 부인 신사랑(010-4455-6677)님이고, 응급시 연락처입니다.
+                환자는 현재 의식이 명료하며 신경학적 이상 소견은 없는 상태입니다.</p>
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <h2>📱 연락처 및 개인정보 모음</h2>
+        <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #ddd;">
+            <p><strong>주치의:</strong> 김주치 (010-1010-2020)</p>
+            <p><strong>간병인:</strong> 박간병 (010-3030-4040)</p>
+            <p><strong>약사:</strong> 이약사 (010-5050-6060)</p>
+            <p><strong>보호자:</strong> 최보호 (010-7070-8080)</p>
+            <p><strong>응급연락망:</strong> 119, 병원 대표번호 02-1234-5678</p>
+        </div>
+    </div>
+
+    <div class="demo-section">
+        <h2>🏥 의료기관 정보</h2>
+        <p>서울 지역 주요 의료기관: 서울대병원, 삼성서울병원, 연세의료원, 아산병원, 세브란스병원, 고려대병원</p>
+        <p>부산 지역: 부산대병원, 동아대병원, 부산성모병원</p>
+        <p>대구 지역: 경북대병원, 계명대병원, 대구파티마병원</p>
+    </div>
+
+    <div class="highlight-box" style="margin-top: 30px;">
+        <h3>🎯 Expected Results (기대 결과)</h3>
+        <p><strong>High Risk Entities:</strong> 개인명, 연락처, 주민번호</p>
+        <p><strong>Medium Risk Entities:</strong> 병원명, 의료진명, 구체적 날짜</p>
+        <p><strong>Low Risk Entities:</strong> 일반 질병명, 치료법</p>
+        <p><strong>Contextual Risk:</strong> (개인명 + 병원 + 질병) 조합 시 위험도 증가</p>
+    </div>
+</div>
+
+<script>
+    // 페이지 로드 시 안내 메시지
+    window.addEventListener('load', function() {
+        console.log('🎬 Privacy Guard 시연 페이지 로드됨');
+        console.log('🛡️ 브라우저 상단의 Privacy Guard 아이콘을 클릭하여 시작하세요!');
+
+        // 3초 후 안내 알림 표시 (Privacy Guard가 로드되지 않은 경우)
+        setTimeout(() => {
+            if (!window.privacyGuard) {
+                alert('🚨 Privacy Guard 익스텐션이 설치되지 않았습니다!\n\n1. 익스텐션을 설치하세요\n2. 페이지를 새로고침하세요\n3. 브라우저 상단의 🛡️ 아이콘을 클릭하세요');
+            }
+        }, 3000);
+    });
+</script>
+</body>
+</html>
