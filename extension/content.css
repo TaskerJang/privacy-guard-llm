@@ -1,0 +1,182 @@
+/* content.css - 수정된 버전 (소스별 스타일 추가) */
+
+/* 기본 마스킹된 텍스트 스타일 */
+.privacy-guard-masked {
+    background: linear-gradient(45deg, #ff6b6b, #ee5a52) !important;
+    color: white !important;
+    padding: 2px 8px !important;
+    border-radius: 12px !important;
+    font-weight: 600 !important;
+    font-size: 0.9em !important;
+    display: inline-block !important;
+    margin: 0 2px !important;
+    animation: privacy-guard-highlight 2s infinite !important;
+    cursor: help !important;
+    position: relative !important;
+    z-index: 1000 !important;
+}
+
+/* 🔥 새로운 기능: 소스별 스타일 */
+.privacy-guard-masked[data-source="python"] {
+    background: linear-gradient(45deg, #28a745, #1e7e34) !important;
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3) !important;
+}
+
+.privacy-guard-masked[data-source="javascript"] {
+    background: linear-gradient(45deg, #ffc107, #e0a800) !important;
+    color: #333 !important;
+    box-shadow: 0 2px 4px rgba(255, 193, 7, 0.3) !important;
+}
+
+/* 🔥 소스별 하이라이트 애니메이션 */
+@keyframes privacy-guard-highlight {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 2px 4px rgba(255, 107, 107, 0.3);
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 4px 8px rgba(255, 107, 107, 0.5);
+    }
+}
+
+.privacy-guard-masked[data-source="python"] {
+    animation: privacy-guard-highlight-python 2s infinite !important;
+}
+
+@keyframes privacy-guard-highlight-python {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 4px 8px rgba(40, 167, 69, 0.5);
+    }
+}
+
+.privacy-guard-masked[data-source="javascript"] {
+    animation: privacy-guard-highlight-js 2s infinite !important;
+}
+
+@keyframes privacy-guard-highlight-js {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 2px 4px rgba(255, 193, 7, 0.3);
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 4px 8px rgba(255, 193, 7, 0.5);
+    }
+}
+
+/* 🔥 새로운 기능: 소스별 툴팁 */
+.privacy-guard-masked[data-source="python"]:hover::before {
+    content: "🐍 Python KoELECTRA 모델" !important;
+    position: absolute !important;
+    bottom: 100% !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    background: rgba(40, 167, 69, 0.9) !important;
+    color: white !important;
+    padding: 4px 8px !important;
+    border-radius: 4px !important;
+    font-size: 10px !important;
+    white-space: nowrap !important;
+    z-index: 10001 !important;
+    margin-bottom: 5px !important;
+}
+
+.privacy-guard-masked[data-source="javascript"]:hover::before {
+    content: "⚡ JavaScript 간소화 모델" !important;
+    position: absolute !important;
+    bottom: 100% !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    background: rgba(255, 193, 7, 0.9) !important;
+    color: #333 !important;
+    padding: 4px 8px !important;
+    border-radius: 4px !important;
+    font-size: 10px !important;
+    white-space: nowrap !important;
+    z-index: 10001 !important;
+    margin-bottom: 5px !important;
+}
+
+/* 기존 스타일들 유지 */
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOutRight {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+
+.privacy-guard-detected {
+    background: rgba(255, 235, 59, 0.3) !important;
+    border: 2px dashed #ffc107 !important;
+    border-radius: 4px !important;
+    padding: 1px 3px !important;
+    animation: privacy-guard-pulse 1.5s infinite !important;
+}
+
+@keyframes privacy-guard-pulse {
+    0%, 100% { opacity: 0.7; }
+    50% { opacity: 1; }
+}
+
+/* 위험도별 색상 (기존 유지) */
+.privacy-guard-masked[data-risk="high"] {
+    background: linear-gradient(45deg, #dc3545, #c82333) !important;
+}
+
+.privacy-guard-masked[data-risk="medium"] {
+    background: linear-gradient(45deg, #fd7e14, #e55a00) !important;
+}
+
+.privacy-guard-masked[data-risk="low"] {
+    background: linear-gradient(45deg, #28a745, #1e7e34) !important;
+}
+
+/* 🔥 새로운 기능: 엔진 전환 알림 */
+.privacy-guard-engine-switch {
+    position: fixed !important;
+    top: 60px !important;
+    right: 20px !important;
+    background: linear-gradient(45deg, #007bff, #0056b3) !important;
+    color: white !important;
+    padding: 8px 16px !important;
+    border-radius: 20px !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    z-index: 10002 !important;
+    animation: slideInRight 0.5s ease, slideOutRight 0.5s ease 3s !important;
+}
+
+/* 플로팅 패널 (기존 유지) */
+.privacy-guard-panel {
+    position: fixed !important;
+    top: 20px !important;
+    right: 20px !important;
+    width: 300px !important;
+    background: white !important;
+    border-radius: 12px !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15) !important;
+    z-index: 10000 !important;
+    border: 1px solid #e9ecef !important;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
