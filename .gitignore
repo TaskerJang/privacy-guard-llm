@@ -112,3 +112,20 @@ datasets/
 # Hugging Face cache
 .cache/
 transformers_cache/
+
+# ====== Ignoring virtual env ======
+venv/
+.env
+
+# ====== Ignoring merged LoRA model artifacts ======
+ner-koelectra-lora-merged/
+*.safetensors
+*.bin
+*.pt
+*.pth
+
+# ====== 기타 대용량 / 캐시 ======
+__pycache__/
+*.cache/
+*.log
+.DS_Store
