@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Privacy Guard LLM 시연 페이지</title>
+    <title>Privacy Guard LLM - 실시간 시연</title>
     <style>
         * {
             margin: 0;
@@ -13,9 +13,8 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            line-height: 1.6;
+            background: #f5f5f5;
             color: #333;
-            background: #f8f9fa;
         }
 
         .container {
@@ -27,97 +26,130 @@
         .header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 40px 20px;
+            padding: 40px;
             text-align: center;
-            border-radius: 12px;
+            border-radius: 15px;
             margin-bottom: 30px;
-        }
-
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
-
-        .header p {
-            font-size: 1.2em;
-            opacity: 0.9;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
 
         .demo-section {
             background: white;
-            border-radius: 12px;
+            border-radius: 15px;
             padding: 30px;
             margin-bottom: 30px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
         }
 
-        .demo-section h2 {
-            color: #2c3e50;
+        .mock-chatgpt {
+            background: #f7f7f8;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 2px solid #e5e5e5;
+        }
+
+        .chat-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
             margin-bottom: 20px;
-            font-size: 1.5em;
-            border-bottom: 2px solid #667eea;
             padding-bottom: 10px;
+            border-bottom: 1px solid #e5e5e5;
         }
 
-        .medical-record {
-            background: #e3f2fd;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 15px 0;
-            border-left: 4px solid #2196f3;
+        .chat-input-container {
+            position: relative;
+            margin-top: 20px;
         }
 
-        .patient-info {
-            background: #fff3e0;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 15px 0;
-            border-left: 4px solid #ff9800;
-        }
-
-        .doctor-note {
-            background: #f3e5f5;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 15px 0;
-            border-left: 4px solid #9c27b0;
-        }
-
-        .emergency-info {
-            background: #ffebee;
-            padding: 20px;
-            border-radius: 8px;
-            margin: 15px 0;
-            border-left: 4px solid #f44336;
-        }
-
-        .instructions {
-            background: #e8f5e8;
-            padding: 20px;
-            border-radius: 8px;
-            margin-top: 30px;
-            border: 1px solid #4caf50;
-        }
-
-        .instructions h3 {
-            color: #2e7d32;
-            margin-bottom: 15px;
-        }
-
-        .instructions ol {
-            margin-left: 20px;
-        }
-
-        .instructions li {
-            margin: 8px 0;
-        }
-
-        .highlight-box {
-            background: #fff9c4;
-            border: 2px dashed #fbc02d;
+        .chat-input {
+            width: 100%;
+            min-height: 100px;
             padding: 15px;
+            border: 2px solid #e5e5e5;
+            border-radius: 10px;
+            font-size: 16px;
+            font-family: inherit;
+            resize: vertical;
+            transition: all 0.3s ease;
+        }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .privacy-warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
             border-radius: 8px;
-            margin: 15px 0;
+            padding: 15px;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .privacy-warning.show {
+            display: block;
+            animation: slideDown 0.3s ease;
+        }
+
+        .warning-content {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .detected-items {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #ffeaa7;
+        }
+
+        .detected-item {
+            display: inline-block;
+            background: #ff6b6b;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            margin: 2px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #ff6b6b;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
 
         .test-scenarios {
@@ -130,20 +162,22 @@
         .scenario-card {
             background: #f8f9fa;
             padding: 20px;
-            border-radius: 8px;
-            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            border: 1px solid #e9ecef;
+            cursor: pointer;
+            transition: all 0.3s ease;
         }
 
-        .scenario-card h4 {
-            color: #495057;
-            margin-bottom: 10px;
+        .scenario-card:hover {
+            background: #e9ecef;
+            transform: translateY(-2px);
         }
 
-        .risk-indicator {
+        .risk-badge {
             display: inline-block;
             padding: 4px 8px;
             border-radius: 12px;
-            font-size: 0.8em;
+            font-size: 12px;
             font-weight: bold;
             margin-left: 10px;
         }
@@ -151,157 +185,225 @@
         .risk-high { background: #ffebee; color: #c62828; }
         .risk-medium { background: #fff3e0; color: #ef6c00; }
         .risk-low { background: #e8f5e8; color: #2e7d32; }
+
+        .instructions {
+            background: #e8f5e8;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            border-left: 4px solid #4caf50;
+        }
+
+        .masked-text {
+            background: #ff6b6b;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .realtime-demo {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+        }
+
+        .typing-indicator {
+            display: none;
+            color: #667eea;
+            font-style: italic;
+            margin-top: 10px;
+        }
+
+        .stats-display {
+            display: flex;
+            justify-content: space-around;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: #6c757d;
+        }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="header">
-        <h1>🏥🔒 Privacy Guard LLM</h1>
-        <p>의료 텍스트 비식별화 시연 페이지</p>
+        <h1>🛡️ Privacy Guard LLM</h1>
+        <p>실시간 민감정보 감지 및 차단 시연</p>
     </div>
 
     <div class="instructions">
-        <h3>🎬 시연 방법</h3>
+        <h3>🎬 실시간 시연 방법</h3>
         <ol>
-            <li><strong>브라우저 우상단의 Privacy Guard 아이콘</strong>을 클릭하세요</li>
-            <li><strong>"보호 기능" 토글</strong>을 켜서 활성화하세요</li>
-            <li><strong>"스캔" 버튼</strong>을 눌러 이 페이지의 개인정보를 감지하세요</li>
-            <li>감지된 개인정보가 <span style="background: #ff6b6b; color: white; padding: 2px 8px; border-radius: 12px;">[MASKED]</span> 형태로 마스킹되는 것을 확인하세요</li>
-            <li>임계값을 조정해서 마스킹 수준을 변경해보세요</li>
+            <li><strong>Privacy Guard 익스텐션 활성화</strong> (우상단 🛡️ 아이콘 클릭)</li>
+            <li><strong>아래 ChatGPT 모의 창에서 텍스트 입력</strong>하면 실시간으로 감지</li>
+            <li><strong>민감정보 감지 시 즉시 경고 표시</strong> 및 차단 옵션 제공</li>
+            <li><strong>실제 ChatGPT에서도 동일하게 작동</strong></li>
         </ol>
     </div>
 
+    <div class="realtime-demo">
+        <h2>⚡ 실시간 감지 시연</h2>
+        <p>실제 ChatGPT 환경을 모방한 실시간 민감정보 감지 데모</p>
+    </div>
+
     <div class="demo-section">
-        <h2>📋 환자 기록 예시 1</h2>
-        <div class="medical-record">
-            <h4>진료 기록</h4>
-            <p>환자명: 김철수 (42세 남성)</p>
-            <p>진료일: 2023년 10월 15일</p>
-            <p>진료과: 내과</p>
-            <p>담당의: 박영희 교수님</p>
-            <p>진단명: 당뇨병, 고혈압</p>
-            <p>연락처: 010-1234-5678</p>
-            <p>주소: 서울시 강남구 역삼동</p>
-            <p>처방: 메트포르민 500mg, 아모디핀 5mg</p>
+        <h2>💬 ChatGPT 시뮬레이션</h2>
+        <div class="mock-chatgpt">
+            <div class="chat-header">
+                <div style="width: 12px; height: 12px; background: #ff5f56; border-radius: 50%;"></div>
+                <div style="width: 12px; height: 12px; background: #ffbd2e; border-radius: 50%;"></div>
+                <div style="width: 12px; height: 12px; background: #27ca3f; border-radius: 50%;"></div>
+                <span style="margin-left: 10px; font-weight: bold;">ChatGPT</span>
+            </div>
+
+            <div class="chat-input-container">
+                    <textarea
+                            class="chat-input"
+                            id="chatInput"
+                            placeholder="ChatGPT에게 메시지를 입력하세요... (민감정보 포함 시 자동 감지됩니다)"
+                    ></textarea>
+
+                <div class="typing-indicator" id="typingIndicator">
+                    🔍 민감정보 스캔 중...
+                </div>
+
+                <div class="privacy-warning" id="privacyWarning">
+                    <div class="warning-content">
+                        <span style="font-size: 24px;">⚠️</span>
+                        <div>
+                            <strong>민감정보 감지됨!</strong>
+                            <p>입력하신 내용에 개인정보가 포함되어 있습니다.</p>
+                        </div>
+                    </div>
+                    <div class="detected-items" id="detectedItems"></div>
+                    <div class="action-buttons">
+                        <button class="btn btn-primary" onclick="maskAndSend()">🎭 마스킹 후 전송</button>
+                        <button class="btn btn-danger" onclick="blockSending()">🚫 전송 차단</button>
+                        <button class="btn btn-secondary" onclick="ignoreWarning()">⚠️ 무시하고 전송</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
     <div class="demo-section">
-        <h2>🏥 병원 진료 기록 2</h2>
-        <div class="patient-info">
-            <h4>입원 환자 정보</h4>
-            <p>환자: 이순신씨가 2023년 9월 20일에 서울대병원 응급실로 내원하였습니다.</p>
-            <p>주소진단: 급성 심근경색 의심으로 흉통을 호소하며 응급실 도착</p>
-            <p>나이: 65세, 성별: 남성</p>
-            <p>보호자 연락처: 010-9876-5432 (배우자 이영희)</p>
-            <p>담당의: 김하늘 심장내과 교수</p>
-            <p>시술: 관상동맥 조영술 시행 예정</p>
-        </div>
-    </div>
+        <h2>🧪 테스트 시나리오</h2>
+        <p>아래 시나리오들을 클릭하면 자동으로 입력창에 입력됩니다.</p>
 
-    <div class="demo-section">
-        <h2>👩‍⚕️ 의료진 소견서</h2>
-        <div class="doctor-note">
-            <h4>진료 소견</h4>
-            <p>환자 박민수(38세)는 만성 간염으로 인한 간경화 진단을 받았습니다.</p>
-            <p>삼성서울병원에서 정기적인 추적 관찰 중이며, 6개월마다 복부 CT 검사를 시행하고 있습니다.</p>
-            <p>담당의사: 최수진 소화기내과 전문의</p>
-            <p>다음 예약일: 2024년 1월 15일 오후 2시</p>
-            <p>환자 연락처: 010-5555-7777</p>
-            <p>특이사항: B형 간염 보균자, 가족력 있음</p>
-        </div>
-    </div>
-
-    <div class="demo-section">
-        <h2>🚨 응급실 기록</h2>
-        <div class="emergency-info">
-            <h4>응급실 내원 기록</h4>
-            <p>2023년 11월 3일 오전 3시 30분, 정영수(29세 남성)가 교통사고로 연세의료원 응급실에 내원</p>
-            <p>의식 상태: 명료, 활력징후 안정</p>
-            <p>주 호소: 우측 다리 통증 및 부종</p>
-            <p>담당 의료진: 응급의학과 김응급 전문의, 정형외과 박뼈다리 교수 협진</p>
-            <p>보호자: 어머니 정사랑 (010-1111-2222)</p>
-            <p>진단: 우측 경골 골절 의심</p>
-            <p>치료 계획: X-ray 촬영 후 정형외과 입원 예정</p>
-        </div>
-    </div>
-
-    <div class="demo-section">
-        <h2>📊 테스트 시나리오</h2>
         <div class="test-scenarios">
-            <div class="scenario-card">
-                <h4>개인정보 + 의료정보 조합 <span class="risk-indicator risk-high">고위험</span></h4>
-                <p>환자 홍길동(45세)이 아산병원에서 폐암 수술을 받았습니다. 담당의는 김수술 교수님입니다.</p>
+            <div class="scenario-card" onclick="insertScenario(this)">
+                <h4>의료 정보 + 개인정보 <span class="risk-badge risk-high">고위험</span></h4>
+                <p data-text="김철수(42세)가 서울대병원에서 당뇨병 진단을 받았습니다. 010-1234-5678로 연락주세요.">환자 정보와 연락처가 포함된 의료 상담</p>
             </div>
 
-            <div class="scenario-card">
-                <h4>연락처 포함 <span class="risk-indicator risk-high">고위험</span></h4>
-                <p>응급 연락처: 010-9999-8888 (환자 본인), 010-7777-6666 (보호자)</p>
+            <div class="scenario-card" onclick="insertScenario(this)">
+                <h4>응급실 기록 <span class="risk-badge risk-high">고위험</span></h4>
+                <p data-text="이영희 환자가 2023년 11월 3일 연세의료원 응급실에 내원했습니다. 보호자 연락처는 010-9876-5432입니다.">응급실 환자 정보</p>
             </div>
 
-            <div class="scenario-card">
-                <h4>의료진 정보 <span class="risk-indicator risk-medium">중위험</span></h4>
-                <p>김의사 선생님이 오늘 야간 당직을 서십니다. 간호사 박케어님과 함께 근무합니다.</p>
+            <div class="scenario-card" onclick="insertScenario(this)">
+                <h4>의료진 정보 <span class="risk-badge risk-medium">중위험</span></h4>
+                <p data-text="박의사 선생님이 오늘 심장외과에서 수술을 집도하십니다. 간호사 김간호님과 함께 근무합니다.">의료진 스케줄 정보</p>
             </div>
 
-            <div class="scenario-card">
-                <h4>일반 의료 정보 <span class="risk-indicator risk-low">저위험</span></h4>
-                <p>당뇨병 환자는 규칙적인 식사와 운동이 중요합니다. 혈당 관리가 핵심입니다.</p>
+            <div class="scenario-card" onclick="insertScenario(this)">
+                <h4>일반 의료 상담 <span class="risk-badge risk-low">저위험</span></h4>
+                <p data-text="고혈압 환자는 어떤 음식을 피해야 하나요? 운동은 어떻게 하는 것이 좋을까요?">일반적인 의료 상담</p>
+            </div>
+
+            <div class="scenario-card" onclick="insertScenario(this)">
+                <h4>복합 개인정보 <span class="risk-badge risk-high">고위험</span></h4>
+                <p data-text="환자 신동욱(52세, 010-1122-3344)이 고려대병원 신경외과에 뇌종양으로 입원했습니다. 보호자는 신사랑(010-4455-6677)님입니다.">다중 개인정보 포함</p>
+            </div>
+
+            <div class="scenario-card" onclick="insertScenario(this)">
+                <h4>주민번호 포함 <span class="risk-badge risk-high">고위험</span></h4>
+                <p data-text="홍길동 환자 (주민번호: 850301-1234567)의 검사 결과를 확인해주세요.">주민번호가 포함된 요청</p>
             </div>
         </div>
     </div>
 
     <div class="demo-section">
-        <h2>🔬 복잡한 의료 케이스</h2>
-        <div class="highlight-box">
-            <h4>다중 개인정보가 포함된 복합 케이스</h4>
-            <p>환자 신동욱(52세 남성, 010-1122-3344)이 2023년 12월 1일 고려대병원 신경외과에 뇌종양으로 입원했습니다.
-                담당의는 이뇌수술 교수님이며, 수술 예정일은 12월 5일입니다.
-                보호자는 부인 신사랑(010-4455-6677)님이고, 응급시 연락처입니다.
-                환자는 현재 의식이 명료하며 신경학적 이상 소견은 없는 상태입니다.</p>
+        <h2>📊 실시간 통계</h2>
+        <div class="stats-display">
+            <div class="stat-item">
+                <div class="stat-value" id="totalScanned">0</div>
+                <div class="stat-label">스캔된 텍스트</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="detectedCount">0</div>
+                <div class="stat-label">감지된 민감정보</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="blockedCount">0</div>
+                <div class="stat-label">차단된 전송</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="avgRiskScore">0%</div>
+                <div class="stat-label">평균 위험도</div>
+            </div>
         </div>
     </div>
 
     <div class="demo-section">
-        <h2>📱 연락처 및 개인정보 모음</h2>
-        <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #ddd;">
-            <p><strong>주치의:</strong> 김주치 (010-1010-2020)</p>
-            <p><strong>간병인:</strong> 박간병 (010-3030-4040)</p>
-            <p><strong>약사:</strong> 이약사 (010-5050-6060)</p>
-            <p><strong>보호자:</strong> 최보호 (010-7070-8080)</p>
-            <p><strong>응급연락망:</strong> 119, 병원 대표번호 02-1234-5678</p>
+        <h2>🔍 감지 결과 예시</h2>
+        <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-top: 20px;">
+            <h4>원본 텍스트:</h4>
+            <p style="margin: 10px 0;">김철수(42세)가 서울대병원에서 당뇨병 진단을 받았습니다. 010-1234-5678로 연락주세요.</p>
+
+            <h4>마스킹 결과:</h4>
+            <p style="margin: 10px 0;">
+                <span class="masked-text">[PERSON]</span>(42세)가
+                <span class="masked-text">[HOSPITAL]</span>에서 당뇨병 진단을 받았습니다.
+                <span class="masked-text">[CONTACT]</span>로 연락주세요.
+            </p>
+
+            <h4>위험도 분석:</h4>
+            <ul style="margin: 10px 0; padding-left: 20px;">
+                <li>개인명 (김철수): 위험도 85% - 실명 식별 가능</li>
+                <li>병원명 (서울대병원): 위험도 70% - 특정 의료기관</li>
+                <li>연락처 (010-1234-5678): 위험도 95% - 직접 연락 가능</li>
+                <li>조합 위험도: 98% - 개인 완전 식별 가능</li>
+            </ul>
         </div>
-    </div>
-
-    <div class="demo-section">
-        <h2>🏥 의료기관 정보</h2>
-        <p>서울 지역 주요 의료기관: 서울대병원, 삼성서울병원, 연세의료원, 아산병원, 세브란스병원, 고려대병원</p>
-        <p>부산 지역: 부산대병원, 동아대병원, 부산성모병원</p>
-        <p>대구 지역: 경북대병원, 계명대병원, 대구파티마병원</p>
-    </div>
-
-    <div class="highlight-box" style="margin-top: 30px;">
-        <h3>🎯 Expected Results (기대 결과)</h3>
-        <p><strong>High Risk Entities:</strong> 개인명, 연락처, 주민번호</p>
-        <p><strong>Medium Risk Entities:</strong> 병원명, 의료진명, 구체적 날짜</p>
-        <p><strong>Low Risk Entities:</strong> 일반 질병명, 치료법</p>
-        <p><strong>Contextual Risk:</strong> (개인명 + 병원 + 질병) 조합 시 위험도 증가</p>
     </div>
 </div>
 
+<script src="masking-engine.js"></script>
+<script src="content.js"></script>
 <script>
-    // 페이지 로드 시 안내 메시지
-    window.addEventListener('load', function() {
-        console.log('🎬 Privacy Guard 시연 페이지 로드됨');
-        console.log('🛡️ 브라우저 상단의 Privacy Guard 아이콘을 클릭하여 시작하세요!');
-
-        // 3초 후 안내 알림 표시 (Privacy Guard가 로드되지 않은 경우)
-        setTimeout(() => {
-            if (!window.privacyGuard) {
-                alert('🚨 Privacy Guard 익스텐션이 설치되지 않았습니다!\n\n1. 익스텐션을 설치하세요\n2. 페이지를 새로고침하세요\n3. 브라우저 상단의 🛡️ 아이콘을 클릭하세요');
-            }
-        }, 3000);
-    });
+    // 테스트 시나리오 클릭용 헬퍼
+    function insertScenario(el) {
+        const text = el.querySelector('p').dataset.text;
+        const textarea = document.getElementById('chatInput');
+        textarea.value = text;
+        // content.js 쪽 input 이벤트 트리거
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    }
 </script>
 </body>
 </html>
