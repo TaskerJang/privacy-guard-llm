@@ -1,642 +1,690 @@
 // extension/content.js
-// 개선된 콘텐츠 스크립트 - UI/UX 개선 및 간소화
+// 개선된 컨텐츠 스크립트 - 통신 문제 해결
 
-console.log("🟢 Privacy Guard Content Script 로드됨");
-
-class PrivacyGuardUI {
+class PrivacyGuardContent {
     constructor() {
-        this.supportedSites = {
-            "localhost": { selector: "#chatInput", type: "demo" },
-            "chat.openai.com": { selector: '#prompt-textarea, [data-testid="textbox"]', type: "chatgpt" },
-            "claude.ai": { selector: '[contenteditable="true"]', type: "claude" },
-            "bard.google.com": { selector: 'rich-textarea', type: "bard" }
+        this.isEnabled = false;
+        this.settings = {
+            mode: 'medical',
+            threshold: 50
         };
 
-        this.currentSite = this.detectSite();
-        this.isEnabled = false;
-        this.monitoredInputs = new Set();
-
-        // UI 상태
-        this.warningTimeout = null;
-        this.currentWarning = null;
+        this.lastResult = null;
         this.isProcessing = false;
+        this.serverAvailable = false;
+
+        // 모니터링할 요소들
+        this.textInputs = new Set();
+        this.observedElements = new WeakSet();
 
         this.init();
     }
 
-    detectSite() {
-        const hostname = window.location.hostname;
-        return this.supportedSites[hostname] || null;
-    }
+    async init() {
+        console.log('🛡️ Privacy Guard Content Script 초기화');
 
-    init() {
-        if (!this.currentSite) {
-            console.log("⚠️ 지원하지 않는 사이트");
-            return;
-        }
+        // 설정 로드
+        await this.loadSettings();
 
-        console.log(`🛡️ Privacy Guard 초기화: ${this.currentSite.type}`);
+        // 서버 상태 확인
+        await this.checkServerAvailability();
 
-        this.loadSettings();
-        this.setupInputMonitoring();
-        this.injectUI();
-        this.setupMessageListener();
+        // DOM 감시 시작
+        this.startDOMObserver();
+
+        // 메시지 리스너 설정
+        this.setupMessageListeners();
+
+        // 주기적 서버 체크
+        this.startPeriodicServerCheck();
+
+        console.log(`🛡️ Privacy Guard 준비 완료 (활성: ${this.isEnabled}, 서버: ${this.serverAvailable})`);
     }
 
     /**
-     * 입력 필드 모니터링 설정
+     * 설정 로드
      */
-    setupInputMonitoring() {
-        // DOM 변화 감지
-        const observer = new MutationObserver(() => {
-            this.attachToInputs();
+    async loadSettings() {
+        try {
+            const result = await chrome.storage.sync.get(['privacyGuardSettings']);
+            if (result.privacyGuardSettings) {
+                const settings = result.privacyGuardSettings;
+                this.isEnabled = settings.enabled || false;
+                this.settings = { ...this.settings, ...settings };
+            }
+        } catch (error) {
+            console.warn('설정 로드 실패:', error);
+        }
+    }
+
+    /**
+     * 서버 가용성 체크
+     */
+    async checkServerAvailability() {
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+            const response = await fetch('http://localhost:8000/health', {
+                method: 'GET',
+                signal: controller.signal,
+                headers: { 'Accept': 'application/json' }
+            });
+
+            clearTimeout(timeoutId);
+            this.serverAvailable = response.ok;
+
+            if (this.serverAvailable) {
+                console.log('✅ 서버 연결 성공');
+            }
+
+        } catch (error) {
+            this.serverAvailable = false;
+            console.log('⚠️ 서버 연결 실패 - 로컬 모드로 동작');
+        }
+    }
+
+    /**
+     * DOM 관찰자 시작
+     */
+    startDOMObserver() {
+        // 기존 입력 요소들 스캔
+        this.scanForTextInputs();
+
+        // MutationObserver로 동적 요소 감지
+        this.observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                    if (node.nodeType === Node.ELEMENT_NODE) {
+                        this.scanElementForInputs(node);
+                    }
+                });
+            });
         });
 
-        observer.observe(document.body, {
+        this.observer.observe(document.body, {
             childList: true,
             subtree: true
         });
-
-        this.attachToInputs();
     }
 
     /**
-     * 입력 필드에 이벤트 리스너 연결
+     * 텍스트 입력 요소 스캔
      */
-    attachToInputs() {
-        const inputs = document.querySelectorAll(this.currentSite.selector);
+    scanForTextInputs() {
+        const selectors = [
+            'textarea',
+            'input[type="text"]',
+            'input[type="search"]',
+            '[contenteditable="true"]',
+            '[role="textbox"]'
+        ];
 
-        inputs.forEach(input => {
-            if (this.monitoredInputs.has(input)) return;
-
-            this.monitoredInputs.add(input);
-
-            // 실시간 입력 감지
-            input.addEventListener('input', (e) => {
-                if (!this.isEnabled) return;
-                this.handleRealTimeInput(e.target);
+        selectors.forEach(selector => {
+            document.querySelectorAll(selector).forEach(element => {
+                this.addInputListener(element);
             });
-
-            // 전송 시도 감지
-            input.addEventListener('keydown', (e) => {
-                if (!this.isEnabled) return;
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    this.handleSubmitAttempt(e, input);
-                }
-            });
-
-            console.log(`📝 입력 필드 모니터링 시작: ${this.currentSite.type}`);
         });
     }
 
     /**
-     * 실시간 입력 처리
+     * 특정 요소에서 입력 요소 스캔
      */
-    async handleRealTimeInput(input) {
-        const text = this.getInputText(input);
-
-        if (!text || text.length < 5) {
-            this.hideWarning();
-            return;
+    scanElementForInputs(element) {
+        if (this.isTextInput(element)) {
+            this.addInputListener(element);
         }
 
-        // 디바운싱
-        clearTimeout(this.warningTimeout);
-        this.warningTimeout = setTimeout(async () => {
-            try {
-                const analysis = await window.privacyClient.quickAnalyze(text);
+        // 하위 요소들도 스캔
+        const inputs = element.querySelectorAll('textarea, input[type="text"], input[type="search"], [contenteditable="true"], [role="textbox"]');
+        inputs.forEach(input => this.addInputListener(input));
+    }
 
-                if (analysis.hasRisk && analysis.riskLevel > 30) {
-                    this.showRealTimeWarning(analysis, input);
-                } else {
-                    this.hideWarning();
-                }
-            } catch (error) {
-                console.warn('실시간 분석 오류:', error);
+    /**
+     * 텍스트 입력 요소인지 확인
+     */
+    isTextInput(element) {
+        if (!element || !element.tagName) return false;
+
+        const tagName = element.tagName.toLowerCase();
+
+        if (tagName === 'textarea') return true;
+        if (tagName === 'input' && ['text', 'search'].includes(element.type)) return true;
+        if (element.contentEditable === 'true') return true;
+        if (element.getAttribute('role') === 'textbox') return true;
+
+        return false;
+    }
+
+    /**
+     * 입력 요소에 리스너 추가
+     */
+    addInputListener(element) {
+        if (this.observedElements.has(element)) return;
+
+        this.observedElements.add(element);
+        this.textInputs.add(element);
+
+        // 실시간 입력 감지
+        let inputTimeout;
+        const handleInput = () => {
+            if (!this.isEnabled) return;
+
+            clearTimeout(inputTimeout);
+            inputTimeout = setTimeout(() => {
+                this.analyzeInput(element);
+            }, 1000); // 1초 디바운싱
+        };
+
+        // 전송 시도 감지
+        const handleKeyDown = (e) => {
+            if (!this.isEnabled) return;
+
+            // Enter 키 (Shift+Enter 제외) 또는 Ctrl+Enter
+            if ((e.key === 'Enter' && !e.shiftKey) || (e.key === 'Enter' && e.ctrlKey)) {
+                this.handleSendAttempt(element, e);
             }
-        }, 500);
+        };
+
+        element.addEventListener('input', handleInput);
+        element.addEventListener('keydown', handleKeyDown);
+
+        // 정리 함수 저장 (필요시 사용)
+        element._privacyGuardCleanup = () => {
+            element.removeEventListener('input', handleInput);
+            element.removeEventListener('keydown', handleKeyDown);
+            this.textInputs.delete(element);
+            this.observedElements.delete(element);
+        };
+    }
+
+    /**
+     * 입력 내용 분석
+     */
+    async analyzeInput(element) {
+        const text = this.getElementText(element);
+        if (!text || text.length < 10) return;
+
+        try {
+            const result = await this.maskText(text);
+
+            // 민감정보가 감지되면 시각적 경고
+            if (result.stats.totalEntities > 0) {
+                this.showInputWarning(element, result);
+            } else {
+                this.hideInputWarning(element);
+            }
+
+            this.lastResult = result;
+
+        } catch (error) {
+            console.warn('입력 분석 오류:', error);
+        }
     }
 
     /**
      * 전송 시도 처리
      */
-    async handleSubmitAttempt(event, input) {
-        const text = this.getInputText(input);
-
-        if (!text) return;
+    async handleSendAttempt(element, event) {
+        const text = this.getElementText(element);
+        if (!text || text.length < 5) return;
 
         try {
-            this.showProcessingIndicator();
+            const result = await this.maskText(text);
 
-            const result = await window.privacyClient.maskText(text);
+            if (result.stats.totalEntities > 0) {
+                const action = await this.showSendWarningDialog(result);
 
-            this.hideProcessingIndicator();
+                switch (action) {
+                    case 'mask':
+                        // 마스킹된 텍스트로 교체
+                        this.setElementText(element, result.maskedText);
+                        this.showToast('민감정보가 마스킹되었습니다', 'info');
+                        break;
 
-            if (result.success && result.stats.maskedEntities > 0) {
-                // 고위험 정보 감지시 차단
-                if (result.stats.avgRisk > 70) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    this.showBlockDialog(result, input);
-                    return;
-                }
+                    case 'block':
+                        // 전송 차단
+                        event.preventDefault();
+                        event.stopImmediatePropagation();
+                        this.showToast('전송이 차단되었습니다', 'warning');
+                        return false;
 
-                // 중위험 정보 감지시 경고
-                if (result.stats.avgRisk > 40) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    this.showMaskingDialog(result, input);
-                    return;
+                    case 'ignore':
+                        // 무시하고 전송
+                        this.showToast('경고를 무시하고 전송합니다', 'info');
+                        break;
                 }
             }
+
+            this.lastResult = result;
 
         } catch (error) {
-            this.hideProcessingIndicator();
-            console.error('전송 분석 오류:', error);
-            this.showErrorToast('분석 중 오류가 발생했습니다');
+            console.error('전송 처리 오류:', error);
+            this.showToast('처리 중 오류가 발생했습니다', 'error');
         }
     }
 
     /**
-     * 실시간 경고 표시
+     * 텍스트 마스킹 (서버 또는 로컬)
      */
-    showRealTimeWarning(analysis, input) {
-        this.hideWarning();
+    async maskText(text) {
+        // 서버 시도
+        if (this.serverAvailable) {
+            try {
+                return await this.serverMaskText(text);
+            } catch (error) {
+                console.warn('서버 마스킹 실패, 로컬로 전환:', error);
+                this.serverAvailable = false;
+            }
+        }
 
-        const warning = document.createElement('div');
-        warning.className = 'privacy-warning-realtime';
-        warning.innerHTML = `
-            <div class="warning-content">
-                <div class="warning-header">
-                    <span class="warning-icon">⚠️</span>
-                    <span class="warning-title">민감정보 감지</span>
-                    <span class="risk-badge risk-${this.getRiskLevel(analysis.riskLevel)}">${analysis.riskLevel}%</span>
-                </div>
-                <div class="warning-message">
-                    ${analysis.entityCount}개의 민감정보가 감지되었습니다
-                </div>
-            </div>
-        `;
-
-        // 입력 필드 근처에 배치
-        const inputRect = input.getBoundingClientRect();
-        warning.style.position = 'fixed';
-        warning.style.top = `${inputRect.bottom + 5}px`;
-        warning.style.left = `${inputRect.left}px`;
-        warning.style.zIndex = '10000';
-
-        document.body.appendChild(warning);
-        this.currentWarning = warning;
+        // 로컬 fallback
+        return this.localMaskText(text);
     }
 
     /**
-     * 차단 대화상자 표시
+     * 서버 기반 마스킹
      */
-    showBlockDialog(result, input) {
-        const dialog = document.createElement('div');
-        dialog.className = 'privacy-dialog-overlay';
-        dialog.innerHTML = `
-            <div class="privacy-dialog">
-                <div class="dialog-header">
-                    <h3>🚫 전송 차단됨</h3>
-                    <p>고위험 민감정보가 감지되어 전송을 차단했습니다</p>
-                </div>
-                
-                <div class="risk-analysis">
-                    <div class="risk-meter">
-                        <div class="risk-bar" style="width: ${result.stats.avgRisk}%"></div>
-                        <span class="risk-label">위험도: ${result.stats.avgRisk}%</span>
-                    </div>
-                </div>
+    async serverMaskText(text) {
+        const response = await fetch('http://localhost:8000/api/mask', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                text: text,
+                mode: this.settings.mode,
+                threshold: this.settings.threshold
+            })
+        });
 
-                <div class="detected-info">
-                    <h4>감지된 정보 (${result.stats.maskedEntities}/${result.stats.totalEntities})</h4>
-                    <div class="entity-list">
-                        ${result.maskingLog.map(log => `
-                            <div class="entity-item">
-                                <span class="entity-type">${log.entity}</span>
-                                <span class="entity-text">${log.token}</span>
-                                <span class="entity-risk">${log.risk_weight}%</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
+        if (!response.ok) {
+            throw new Error(`서버 오류: ${response.status}`);
+        }
 
-                <div class="dialog-actions">
-                    <button class="btn btn-primary" onclick="privacyGuard.applyMasking('${input.id}', ${JSON.stringify(result).replace(/"/g, '&quot;')})">
-                        🎭 마스킹 후 전송
-                    </button>
-                    <button class="btn btn-secondary" onclick="privacyGuard.editMessage()">
-                        ✏️ 수정하기
-                    </button>
-                    <button class="btn btn-danger" onclick="privacyGuard.forceSubmit('${input.id}')">
-                        ⚠️ 무시하고 전송
-                    </button>
-                </div>
-            </div>
-        `;
+        const result = await response.json();
 
-        document.body.appendChild(dialog);
-        this.currentDialog = dialog;
+        if (!result.success) {
+            throw new Error(result.error || '서버 처리 실패');
+        }
+
+        return this.normalizeServerResult(result);
     }
 
     /**
-     * 처리 중 표시
+     * 로컬 마스킹 (fallback)
      */
-    showProcessingIndicator() {
-        if (this.isProcessing) return;
+    localMaskText(text) {
+        const patterns = [
+            { regex: /[가-힣]{2,4}(?=님|씨|환자|의사|선생님)/g, type: '이름', risk: 85, mask: '[이름]' },
+            { regex: /010-\d{4}-\d{4}/g, type: '연락처', risk: 95, mask: '[연락처]' },
+            { regex: /\d{6}-[1-4]\d{6}/g, type: '주민번호', risk: 100, mask: '[주민번호]' },
+            { regex: /(서울대병원|서울대학교병원|삼성서울병원|아산병원|세브란스|연세의료원|고려대병원|[가-힣]+병원|[가-힣]+의료원)/g, type: '의료기관', risk: 70, mask: '[의료기관]' },
+            { regex: /(간암|폐암|위암|대장암|유방암|당뇨병?|고혈압|심장병|뇌종양|백혈병)/g, type: '질병명', risk: 60, mask: '[질병명]' },
+            { regex: /\d{4}년\s*\d{1,2}월\s*\d{1,2}일|\d{4}-\d{1,2}-\d{1,2}/g, type: '날짜', risk: 40, mask: '[날짜]' }
+        ];
 
-        this.isProcessing = true;
-        const indicator = document.createElement('div');
-        indicator.id = 'privacy-processing';
-        indicator.innerHTML = `
-            <div class="processing-content">
-                <div class="spinner"></div>
-                <span>민감정보 분석 중...</span>
-            </div>
-        `;
+        const detected = [];
+        let maskedText = text;
+        let totalRisk = 0;
 
-        document.body.appendChild(indicator);
-    }
+        patterns.forEach(pattern => {
+            const matches = [...text.matchAll(pattern.regex)];
+            matches.forEach(match => {
+                detected.push({
+                    text: match[0],
+                    type: pattern.type,
+                    risk: pattern.risk,
+                    mask: pattern.mask,
+                    start: match.index,
+                    end: match.index + match[0].length
+                });
+                totalRisk += pattern.risk;
+            });
+        });
 
-    hideProcessingIndicator() {
-        this.isProcessing = false;
-        const indicator = document.getElementById('privacy-processing');
-        if (indicator) indicator.remove();
+        // 마스킹 적용 (뒤에서부터)
+        detected
+            .sort((a, b) => b.start - a.start)
+            .forEach(item => {
+                maskedText = maskedText.substring(0, item.start) +
+                    item.mask +
+                    maskedText.substring(item.end);
+            });
+
+        const avgRisk = detected.length > 0 ? Math.round(totalRisk / detected.length) : 0;
+
+        return {
+            success: true,
+            originalText: text,
+            maskedText: maskedText,
+            stats: {
+                totalEntities: detected.length,
+                maskedEntities: detected.length,
+                avgRisk: avgRisk,
+                processingTime: 0
+            },
+            maskingLog: detected.map(item => ({
+                token: item.text,
+                entity: item.type,
+                risk_weight: item.risk,
+                masked_as: item.mask
+            })),
+            timestamp: new Date().toISOString()
+        };
     }
 
     /**
-     * UI 주입
+     * 서버 결과 정규화
      */
-    injectUI() {
-        this.injectStyles();
-        this.injectStatusBar();
-    }
-
-    injectStatusBar() {
-        const statusBar = document.createElement('div');
-        statusBar.id = 'privacy-status-bar';
-        statusBar.innerHTML = `
-            <div class="status-content">
-                <span class="status-icon">🛡️</span>
-                <span class="status-text">Privacy Guard</span>
-                <span class="site-type">${this.currentSite.type}</span>
-                <div class="status-indicator ${this.isEnabled ? 'active' : 'inactive'}"></div>
-            </div>
-        `;
-
-        document.body.appendChild(statusBar);
-    }
-
-    injectStyles() {
-        if (document.querySelector('#privacy-guard-styles')) return;
-
-        const style = document.createElement('style');
-        style.id = 'privacy-guard-styles';
-        style.textContent = `
-            /* Status Bar */
-            #privacy-status-bar {
-                position: fixed;
-                top: 10px;
-                right: 10px;
-                background: linear-gradient(135deg, #667eea, #764ba2);
-                color: white;
-                padding: 8px 16px;
-                border-radius: 20px;
-                font-size: 12px;
-                font-weight: 600;
-                z-index: 9999;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-                transition: all 0.3s ease;
-            }
-
-            .status-content {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-            }
-
-            .status-indicator {
-                width: 8px;
-                height: 8px;
-                border-radius: 50%;
-                background: #ff4757;
-            }
-
-            .status-indicator.active {
-                background: #2ed573;
-                animation: pulse 2s infinite;
-            }
-
-            /* Real-time Warning */
-            .privacy-warning-realtime {
-                background: linear-gradient(135deg, #ffeaa7, #fdcb6e);
-                border: 1px solid #e17055;
-                border-radius: 8px;
-                padding: 12px;
-                max-width: 300px;
-                box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-                animation: slideIn 0.3s ease;
-            }
-
-            .warning-header {
-                display: flex;
-                align-items: center;
-                gap: 8px;
-                margin-bottom: 4px;
-            }
-
-            .risk-badge {
-                background: #e17055;
-                color: white;
-                padding: 2px 6px;
-                border-radius: 10px;
-                font-size: 10px;
-                margin-left: auto;
-            }
-
-            /* Dialog */
-            .privacy-dialog-overlay {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0,0,0,0.5);
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                z-index: 10001;
-            }
-
-            .privacy-dialog {
-                background: white;
-                border-radius: 12px;
-                padding: 24px;
-                max-width: 500px;
-                max-height: 80vh;
-                overflow-y: auto;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            }
-
-            .dialog-header h3 {
-                margin: 0 0 8px 0;
-                color: #e17055;
-            }
-
-            .risk-meter {
-                background: #ecf0f1;
-                border-radius: 10px;
-                height: 20px;
-                position: relative;
-                margin: 16px 0;
-            }
-
-            .risk-bar {
-                background: linear-gradient(90deg, #2ed573, #ffa726, #e74c3c);
-                height: 100%;
-                border-radius: 10px;
-                transition: width 0.3s ease;
-            }
-
-            .entity-list {
-                max-height: 200px;
-                overflow-y: auto;
-                margin: 12px 0;
-            }
-
-            .entity-item {
-                display: flex;
-                justify-content: space-between;
-                padding: 8px;
-                background: #f8f9fa;
-                margin: 4px 0;
-                border-radius: 6px;
-                font-size: 14px;
-            }
-
-            .dialog-actions {
-                display: flex;
-                gap: 12px;
-                margin-top: 20px;
-            }
-
-            .btn {
-                padding: 10px 16px;
-                border: none;
-                border-radius: 6px;
-                font-weight: 600;
-                cursor: pointer;
-                transition: all 0.2s ease;
-            }
-
-            .btn-primary { background: #667eea; color: white; }
-            .btn-secondary { background: #95a5a6; color: white; }
-            .btn-danger { background: #e74c3c; color: white; }
-
-            .btn:hover {
-                transform: translateY(-1px);
-                box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-            }
-
-            /* Processing */
-            #privacy-processing {
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                background: white;
-                padding: 20px;
-                border-radius: 8px;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-                z-index: 10002;
-            }
-
-            .processing-content {
-                display: flex;
-                align-items: center;
-                gap: 12px;
-            }
-
-            .spinner {
-                width: 20px;
-                height: 20px;
-                border: 2px solid #ecf0f1;
-                border-top: 2px solid #667eea;
-                border-radius: 50%;
-                animation: spin 1s linear infinite;
-            }
-
-            @keyframes slideIn {
-                from { opacity: 0; transform: translateY(-10px); }
-                to { opacity: 1; transform: translateY(0); }
-            }
-
-            @keyframes pulse {
-                0%, 100% { opacity: 1; }
-                50% { opacity: 0.5; }
-            }
-
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-        `;
-
-        document.head.appendChild(style);
+    normalizeServerResult(serverResult) {
+        return {
+            success: true,
+            originalText: serverResult.original_text,
+            maskedText: serverResult.masked_text,
+            stats: {
+                totalEntities: serverResult.stats.total_entities,
+                maskedEntities: serverResult.stats.masked_entities,
+                avgRisk: serverResult.stats.avg_risk,
+                processingTime: serverResult.stats.processing_time
+            },
+            maskingLog: serverResult.masking_log || [],
+            modelInfo: serverResult.model_info,
+            timestamp: new Date().toISOString()
+        };
     }
 
     /**
-     * 헬퍼 메서드들
+     * 메시지 리스너 설정
      */
-    getInputText(input) {
-        return input.contentEditable === 'true' ? input.innerText : input.value;
+    setupMessageListeners() {
+        chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+            this.handleMessage(message, sender, sendResponse);
+            return true; // 비동기 응답
+        });
     }
 
-    setInputText(input, text) {
-        if (input.contentEditable === 'true') {
-            input.innerText = text;
-        } else {
-            input.value = text;
+    /**
+     * 메시지 처리
+     */
+    async handleMessage(message, sender, sendResponse) {
+        try {
+            switch (message.action) {
+                case 'toggleProtection':
+                    await this.handleToggleProtection(message);
+                    sendResponse({ success: true });
+                    break;
+
+                case 'getLastResult':
+                    sendResponse({ success: true, result: this.lastResult });
+                    break;
+
+                case 'updateSettings':
+                    this.settings = { ...this.settings, ...message.settings };
+                    sendResponse({ success: true });
+                    break;
+
+                default:
+                    sendResponse({ success: false, error: '알 수 없는 액션' });
+            }
+        } catch (error) {
+            console.error('메시지 처리 오류:', error);
+            sendResponse({ success: false, error: error.message });
         }
     }
 
-    getRiskLevel(risk) {
-        if (risk >= 80) return 'high';
-        if (risk >= 50) return 'medium';
-        return 'low';
-    }
+    /**
+     * 보호 기능 토글 처리
+     */
+    async handleToggleProtection(message) {
+        this.isEnabled = message.enabled;
 
-    hideWarning() {
-        if (this.currentWarning) {
-            this.currentWarning.remove();
-            this.currentWarning = null;
+        if (message.settings) {
+            this.settings = { ...this.settings, ...message.settings };
+        }
+
+        console.log(`🛡️ 보호 기능 ${this.isEnabled ? '활성화' : '비활성화'}`);
+
+        // 모든 경고 숨김
+        if (!this.isEnabled) {
+            this.hideAllWarnings();
         }
     }
 
-    hideDialog() {
-        if (this.currentDialog) {
-            this.currentDialog.remove();
-            this.currentDialog = null;
+    /**
+     * 헬퍼 함수들
+     */
+    getElementText(element) {
+        if (element.tagName.toLowerCase() === 'textarea' ||
+            (element.tagName.toLowerCase() === 'input' && element.type === 'text')) {
+            return element.value;
+        } else if (element.contentEditable === 'true') {
+            return element.innerText || element.textContent;
+        }
+        return '';
+    }
+
+    setElementText(element, text) {
+        if (element.tagName.toLowerCase() === 'textarea' ||
+            (element.tagName.toLowerCase() === 'input' && element.type === 'text')) {
+            element.value = text;
+        } else if (element.contentEditable === 'true') {
+            element.innerText = text;
         }
     }
 
-    showErrorToast(message) {
+    showInputWarning(element, result) {
+        // 간단한 시각적 경고
+        element.style.borderColor = '#e74c3c';
+        element.style.boxShadow = '0 0 0 2px rgba(231, 76, 60, 0.2)';
+        element.title = `민감정보 ${result.stats.totalEntities}개 감지됨 (위험도: ${result.stats.avgRisk}%)`;
+    }
+
+    hideInputWarning(element) {
+        element.style.borderColor = '';
+        element.style.boxShadow = '';
+        element.title = '';
+    }
+
+    hideAllWarnings() {
+        this.textInputs.forEach(element => {
+            this.hideInputWarning(element);
+        });
+    }
+
+    /**
+     * 전송 경고 다이얼로그
+     */
+    async showSendWarningDialog(result) {
+        const riskLevel = result.stats.avgRisk;
+        const entityCount = result.stats.totalEntities;
+
+        // 고위험은 자동 차단
+        if (riskLevel >= 90) {
+            this.showToast(`고위험 정보 감지! 전송이 자동 차단되었습니다 (위험도: ${riskLevel}%)`, 'error');
+            return 'block';
+        }
+
+        // 중위험은 사용자 선택
+        if (riskLevel >= 60) {
+            const message = `민감정보 ${entityCount}개가 감지되었습니다 (위험도: ${riskLevel}%)\n\n어떻게 처리하시겠습니까?`;
+            const action = confirm(`${message}\n\n확인: 마스킹 후 전송\n취소: 전송 차단`);
+            return action ? 'mask' : 'block';
+        }
+
+        // 저위험은 자동 마스킹
+        if (riskLevel >= 30) {
+            this.showToast(`민감정보가 자동으로 마스킹되었습니다`, 'info');
+            return 'mask';
+        }
+
+        // 위험도 낮음 - 통과
+        return 'ignore';
+    }
+
+    /**
+     * 토스트 메시지 표시
+     */
+    showToast(message, type = 'info') {
+        // 기존 토스트 제거
+        const existingToast = document.querySelector('.privacy-guard-toast');
+        if (existingToast) {
+            existingToast.remove();
+        }
+
         const toast = document.createElement('div');
-        toast.className = 'privacy-error-toast';
-        toast.textContent = message;
+        toast.className = 'privacy-guard-toast';
         toast.style.cssText = `
             position: fixed;
             top: 20px;
             right: 20px;
-            background: #e74c3c;
+            background: ${this.getToastColor(type)};
             color: white;
             padding: 12px 20px;
-            border-radius: 6px;
-            z-index: 10003;
+            border-radius: 8px;
+            z-index: 999999;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            animation: slideInRight 0.3s ease;
+            max-width: 300px;
+            line-height: 1.4;
         `;
 
+        // 아이콘 추가
+        const icon = this.getToastIcon(type);
+        toast.innerHTML = `${icon} ${message}`;
+
         document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 3000);
+
+        // 자동 제거
+        setTimeout(() => {
+            toast.style.animation = 'slideOutRight 0.3s ease';
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.remove();
+                }
+            }, 300);
+        }, 4000);
+
+        // CSS 애니메이션 추가 (한 번만)
+        if (!document.querySelector('#privacy-guard-animations')) {
+            const style = document.createElement('style');
+            style.id = 'privacy-guard-animations';
+            style.textContent = `
+                @keyframes slideInRight {
+                    from {
+                        opacity: 0;
+                        transform: translateX(100%);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateX(0);
+                    }
+                }
+                @keyframes slideOutRight {
+                    from {
+                        opacity: 1;
+                        transform: translateX(0);
+                    }
+                    to {
+                        opacity: 0;
+                        transform: translateX(100%);
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+    }
+
+    getToastColor(type) {
+        const colors = {
+            'info': '#3498db',
+            'success': '#2ed573',
+            'warning': '#f39c12',
+            'error': '#e74c3c'
+        };
+        return colors[type] || colors.info;
+    }
+
+    getToastIcon(type) {
+        const icons = {
+            'info': '🛡️',
+            'success': '✅',
+            'warning': '⚠️',
+            'error': '🚫'
+        };
+        return icons[type] || icons.info;
     }
 
     /**
-     * 액션 핸들러들
+     * 주기적 서버 체크
      */
-    async applyMasking(inputId, result) {
-        const input = document.getElementById(inputId);
-        if (input && result.maskedText) {
-            this.setInputText(input, result.maskedText);
-        }
-        this.hideDialog();
-    }
-
-    editMessage() {
-        this.hideDialog();
-    }
-
-    forceSubmit(inputId) {
-        this.hideDialog();
-        const input = document.getElementById(inputId);
-        if (input) {
-            // 전송 로직 실행
-            const event = new KeyboardEvent('keydown', {
-                key: 'Enter',
-                code: 'Enter',
-                bubbles: true
-            });
-            input.dispatchEvent(event);
-        }
+    startPeriodicServerCheck() {
+        setInterval(() => {
+            this.checkServerAvailability();
+        }, 30000); // 30초마다
     }
 
     /**
-     * 설정 관리
+     * 정리 함수
      */
-    loadSettings() {
-        chrome.storage?.sync?.get(['privacyGuardSettings'], (result) => {
-            if (result.privacyGuardSettings) {
-                this.isEnabled = result.privacyGuardSettings.enabled || false;
-                this.updateStatusUI();
+    cleanup() {
+        // MutationObserver 정리
+        if (this.observer) {
+            this.observer.disconnect();
+        }
+
+        // 모든 입력 요소 리스너 정리
+        this.textInputs.forEach(element => {
+            if (element._privacyGuardCleanup) {
+                element._privacyGuardCleanup();
             }
         });
-    }
 
-    updateStatusUI() {
-        const indicator = document.querySelector('.status-indicator');
-        if (indicator) {
-            indicator.className = `status-indicator ${this.isEnabled ? 'active' : 'inactive'}`;
-        }
-    }
+        // 토스트 메시지 정리
+        const toasts = document.querySelectorAll('.privacy-guard-toast');
+        toasts.forEach(toast => toast.remove());
 
-    /**
-     * 메시지 리스너
-     */
-    setupMessageListener() {
-        chrome.runtime?.onMessage?.addListener((request, sender, sendResponse) => {
-            switch (request.action) {
-                case 'toggleProtection':
-                    this.isEnabled = request.enabled;
-                    this.updateStatusUI();
-                    break;
-
-                case 'scanPage':
-                    this.handlePageScan(sendResponse);
-                    return true; // 비동기 응답
-            }
-        });
-    }
-
-    async handlePageScan(sendResponse) {
-        try {
-            const inputs = document.querySelectorAll(this.currentSite.selector);
-            let totalText = '';
-
-            inputs.forEach(input => {
-                totalText += this.getInputText(input) + ' ';
-            });
-
-            if (totalText.trim()) {
-                const result = await window.privacyClient.maskText(totalText);
-                sendResponse({
-                    success: true,
-                    stats: result.stats,
-                    hasContent: true
-                });
-            } else {
-                sendResponse({
-                    success: true,
-                    stats: { totalEntities: 0, maskedEntities: 0, avgRisk: 0 },
-                    hasContent: false
-                });
-            }
-        } catch (error) {
-            sendResponse({
-                success: false,
-                error: error.message
-            });
-        }
+        console.log('🛡️ Privacy Guard 정리 완료');
     }
 }
 
-// 전역 인스턴스 생성
-window.privacyGuard = new PrivacyGuardUI();
+// 콘텐츠 스크립트 초기화
+let privacyGuard = null;
+
+// DOM 준비되면 초기화
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initPrivacyGuard);
+} else {
+    initPrivacyGuard();
+}
+
+function initPrivacyGuard() {
+    try {
+        if (!privacyGuard) {
+            privacyGuard = new PrivacyGuardContent();
+        }
+    } catch (error) {
+        console.error('Privacy Guard 초기화 실패:', error);
+    }
+}
+
+// 페이지 언로드 시 정리
+window.addEventListener('beforeunload', () => {
+    if (privacyGuard) {
+        privacyGuard.cleanup();
+    }
+});
+
+// 전역 에러 핸들러
+window.addEventListener('error', (event) => {
+    if (event.error && event.error.message && event.error.message.includes('privacy')) {
+        console.error('Privacy Guard 오류:', event.error);
+    }
+});
+
+// privacy-client.js와의 연동을 위한 전역 노출
+window.privacyGuardContent = privacyGuard;

@@ -19,7 +19,7 @@
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1000px;
             margin: 0 auto;
             padding: 20px;
         }
@@ -28,7 +28,7 @@
             background: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
             color: white;
-            padding: 40px;
+            padding: 30px;
             text-align: center;
             border-radius: 20px;
             margin-bottom: 30px;
@@ -36,13 +36,13 @@
         }
 
         .header h1 {
-            font-size: 36px;
+            font-size: 32px;
             font-weight: 700;
             margin-bottom: 12px;
         }
 
         .header p {
-            font-size: 18px;
+            font-size: 16px;
             opacity: 0.9;
             margin-bottom: 20px;
         }
@@ -286,7 +286,7 @@
 
         .test-scenarios {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 20px;
             margin-top: 20px;
         }
@@ -349,94 +349,20 @@
         .risk-medium { background: #fff3e0; color: #ef6c00; }
         .risk-low { background: #e8f5e8; color: #2e7d32; }
 
-        .stats-display {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }
-
-        .stat-item {
-            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
-            padding: 25px;
-            border-radius: 16px;
-            text-align: center;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            transition: transform 0.2s ease;
-        }
-
-        .stat-item:hover {
-            transform: translateY(-2px);
-        }
-
-        .stat-value {
-            font-size: 32px;
+        .section-title {
+            font-size: 24px;
             font-weight: 700;
-            color: #667eea;
-            margin-bottom: 8px;
-            display: block;
-        }
-
-        .stat-label {
-            font-size: 13px;
-            color: #6c757d;
-            text-transform: uppercase;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-        }
-
-        .result-example {
-            background: #f8f9fa;
-            padding: 25px;
-            border-radius: 16px;
-            margin-top: 20px;
-            border: 2px solid #e9ecef;
-        }
-
-        .result-example h4 {
+            margin-bottom: 16px;
             color: #333;
-            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .subtitle {
+            color: #6c757d;
             font-size: 16px;
-        }
-
-        .original-text {
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 10px 0;
-            border-left: 4px solid #dc3545;
-        }
-
-        .masked-text-example {
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 10px 0;
-            border-left: 4px solid #28a745;
-        }
-
-        .masked-token {
-            background: linear-gradient(135deg, #e74c3c, #c0392b);
-            color: white;
-            padding: 3px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .risk-analysis {
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 10px 0;
-        }
-
-        .risk-analysis ul {
-            padding-left: 20px;
-        }
-
-        .risk-analysis li {
-            margin-bottom: 6px;
+            margin-bottom: 20px;
             line-height: 1.5;
         }
 
@@ -464,23 +390,6 @@
             }
         }
 
-        .section-title {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 16px;
-            color: #333;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .subtitle {
-            color: #6c757d;
-            font-size: 16px;
-            margin-bottom: 20px;
-            line-height: 1.5;
-        }
-
         @media (max-width: 768px) {
             .container {
                 padding: 15px;
@@ -491,7 +400,7 @@
             }
 
             .header h1 {
-                font-size: 28px;
+                font-size: 24px;
             }
 
             .demo-section {
@@ -504,10 +413,6 @@
 
             .action-buttons {
                 flex-direction: column;
-            }
-
-            .stats-display {
-                grid-template-columns: repeat(2, 1fr);
             }
         }
     </style>
@@ -637,62 +542,6 @@
             </div>
         </div>
     </div>
-
-    <!-- Real-time Stats -->
-    <div class="demo-section">
-        <h2 class="section-title">📊 실시간 통계</h2>
-        <p class="subtitle">현재 세션에서의 감지 및 차단 통계</p>
-
-        <div class="stats-display">
-            <div class="stat-item">
-                <span class="stat-value" id="totalScanned">0</span>
-                <div class="stat-label">스캔된 메시지</div>
-            </div>
-            <div class="stat-item">
-                <span class="stat-value" id="detectedCount">0</span>
-                <div class="stat-label">감지된 민감정보</div>
-            </div>
-            <div class="stat-item">
-                <span class="stat-value" id="blockedCount">0</span>
-                <div class="stat-label">차단된 전송</div>
-            </div>
-            <div class="stat-item">
-                <span class="stat-value" id="avgRiskScore">0%</span>
-                <div class="stat-label">평균 위험도</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Detection Example -->
-    <div class="demo-section">
-        <h2 class="section-title">🔍 감지 결과 예시</h2>
-        <p class="subtitle">AI 모델이 어떻게 민감정보를 감지하고 마스킹하는지 확인해보세요</p>
-
-        <div class="result-example">
-            <h4>📝 원본 텍스트:</h4>
-            <div class="original-text">
-                김철수(42세)가 서울대병원에서 간암 진단을 받았습니다. 연락처는 010-1234-5678입니다.
-            </div>
-
-            <h4>🎭 마스킹 결과:</h4>
-            <div class="masked-text-example">
-                <span class="masked-token">[이름]</span>(42세)가
-                <span class="masked-token">[의료기관]</span>에서 간암 진단을 받았습니다.
-                연락처는 <span class="masked-token">[연락처]</span>입니다.
-            </div>
-
-            <h4>📈 위험도 분석:</h4>
-            <div class="risk-analysis">
-                <ul>
-                    <li><strong>개인명 (김철수)</strong>: 위험도 85% - 실명으로 개인 식별 가능</li>
-                    <li><strong>병원명 (서울대병원)</strong>: 위험도 70% - 특정 의료기관 식별</li>
-                    <li><strong>연락처 (010-1234-5678)</strong>: 위험도 95% - 직접 연락 가능한 개인정보</li>
-                    <li><strong>질병명 (간암)</strong>: 위험도 60% - 민감한 의료 정보</li>
-                    <li><strong>🚨 종합 위험도</strong>: <strong>98%</strong> - 개인 완전 식별 가능으로 전송 차단 권장</li>
-                </ul>
-            </div>
-        </div>
-    </div>
 </div>
 
 <script>
@@ -716,12 +565,7 @@
         privacyWarning: document.getElementById('privacyWarning'),
         riskScore: document.getElementById('riskScore'),
         entityCount: document.getElementById('entityCount'),
-        detectedItems: document.getElementById('detectedItems'),
-        // 통계
-        totalScanned: document.getElementById('totalScanned'),
-        detectedCountEl: document.getElementById('detectedCount'),
-        blockedCount: document.getElementById('blockedCount'),
-        avgRiskScore: document.getElementById('avgRiskScore')
+        detectedItems: document.getElementById('detectedItems')
     };
 
     // 초기화
@@ -808,11 +652,11 @@
     function simulateAnalysis(text) {
         const patterns = [
             { regex: /[가-힣]{2,4}(?=님|씨|환자|의사|선생님)/g, type: '이름', risk: 85, mask: '[이름]' },
-            { regex: /010-\d{4}-\d{4}/g, type: '연락처', risk: 95, mask: '[연락처]' },
-            { regex: /\d{6}-[1-4]\d{6}/g, type: '주민번호', risk: 100, mask: '[주민번호]' },
+            { regex: /010-\\d{4}-\\d{4}/g, type: '연락처', risk: 95, mask: '[연락처]' },
+            { regex: /\\d{6}-[1-4]\\d{6}/g, type: '주민번호', risk: 100, mask: '[주민번호]' },
             { regex: /(서울대병원|서울대학교병원|삼성서울병원|아산병원|세브란스|연세의료원|고려대병원|[가-힣]+병원|[가-힣]+의료원)/g, type: '의료기관', risk: 70, mask: '[의료기관]' },
             { regex: /(간암|폐암|위암|대장암|유방암|당뇨병?|고혈압|심장병|뇌종양|백혈병)/g, type: '질병명', risk: 60, mask: '[질병명]' },
-            { regex: /\d{4}년\s*\d{1,2}월\s*\d{1,2}일|\d{4}-\d{1,2}-\d{1,2}/g, type: '날짜', risk: 40, mask: '[날짜]' }
+            { regex: /\\d{4}년\\s*\\d{1,2}월\\s*\\d{1,2}일|\\d{4}-\\d{1,2}-\\d{1,2}/g, type: '날짜', risk: 40, mask: '[날짜]' }
         ];
 
         const detected = [];
@@ -835,7 +679,7 @@
             });
         });
 
-        // 마스킹 적용 (뒤에서부터)
+        // 마스킹 적용
         detected
             .sort((a, b) => b.start - a.start)
             .forEach(item => {
@@ -868,16 +712,13 @@
     function showRealTimeWarning(result) {
         const { stats, maskingLog } = result;
 
-        // 위험도와 개체 수 업데이트
         elements.riskScore.textContent = `위험도: ${stats.avgRisk}%`;
         elements.entityCount.textContent = `${stats.totalEntities}개`;
 
-        // 감지된 항목들 표시
         elements.detectedItems.innerHTML = maskingLog.map(log =>
             `<span class="detected-tag">${log.entity}: ${log.token}</span>`
         ).join('');
 
-        // 경고창 표시
         elements.privacyWarning.classList.add('show');
     }
 
@@ -897,16 +738,12 @@
 
             const result = await analyzeText(text);
 
-            // 통계 업데이트
-            updateStats(result);
-
             // 고위험이면 차단, 저위험이면 마스킹 후 전송
             if (result.stats.avgRisk >= 80) {
                 showBlockDialog(result);
             } else if (result.stats.avgRisk >= 40) {
                 showMaskingDialog(result);
             } else {
-                // 안전한 메시지
                 showSuccessMessage();
                 clearInput();
             }
@@ -920,25 +757,11 @@
         }
     }
 
-    // 통계 업데이트
-    function updateStats(result) {
-        stats.totalScanned++;
-        stats.detectedCount += result.stats.totalEntities;
-        stats.totalRisk += result.stats.avgRisk;
-
-        elements.totalScanned.textContent = stats.totalScanned;
-        elements.detectedCountEl.textContent = stats.detectedCount;
-        elements.avgRiskScore.textContent = stats.totalScanned > 0 ?
-            Math.round(stats.totalRisk / stats.totalScanned) + '%' : '0%';
-    }
-
     // 시나리오 삽입
     function insertScenario(card) {
         const text = card.querySelector('p').dataset.text;
         elements.chatInput.value = text;
         elements.chatInput.dispatchEvent(new Event('input'));
-
-        // 스크롤 to 채팅창
         elements.chatInterface.scrollIntoView({ behavior: 'smooth' });
     }
 
@@ -954,8 +777,6 @@
     }
 
     function blockSending() {
-        stats.blockedCount++;
-        elements.blockedCount.textContent = stats.blockedCount;
         hideWarning();
         showErrorMessage('전송이 차단되었습니다');
         clearInput();
@@ -983,15 +804,13 @@
     }
 
     function showMaskingDialog(result) {
-        const message = `중위험 정보가 감지되었습니다. 마스킹 후 전송하시겠습니까?`;
-        if (confirm(message)) {
+        if (confirm(`중위험 정보가 감지되었습니다. 마스킹 후 전송하시겠습니까?`)) {
             maskAndSend();
         }
     }
 
     function showBlockDialog(result) {
-        const message = `고위험 정보가 감지되어 전송을 차단합니다. (위험도: ${result.stats.avgRisk}%)`;
-        alert(message);
+        alert(`고위험 정보가 감지되어 전송을 차단합니다. (위험도: ${result.stats.avgRisk}%)`);
         blockSending();
     }
 
@@ -1011,9 +830,7 @@
         animation: slideIn 0.3s ease;
     `;
         toast.textContent = message;
-
         document.body.appendChild(toast);
-
         setTimeout(() => {
             toast.style.animation = 'slideOut 0.3s ease';
             setTimeout(() => toast.remove(), 300);
@@ -1022,7 +839,6 @@
 
     // 확장 프로그램 상태 확인
     function checkExtensionStatus() {
-        // Privacy Client 확인
         if (window.privacyClient) {
             elements.protectionStatus.classList.add('active');
             elements.statusText.textContent = '보호 기능 활성화됨';
@@ -1030,7 +846,6 @@
             elements.statusText.textContent = '확장 프로그램을 활성화해주세요';
         }
 
-        // 주기적 체크
         setInterval(() => {
             if (window.privacyClient && window.privacyClient.isConnected) {
                 elements.protectionStatus.classList.add('active');
@@ -1042,28 +857,8 @@
         }, 5000);
     }
 
-    // 추가 CSS 애니메이션
-    const additionalStyles = `
-    @keyframes slideOut {
-        from {
-            opacity: 1;
-            transform: translateX(0);
-        }
-        to {
-            opacity: 0;
-            transform: translateX(100%);
-        }
-    }
-`;
-
-    const styleSheet = document.createElement('style');
-    styleSheet.textContent = additionalStyles;
-    document.head.appendChild(styleSheet);
-
     // 페이지 로드 시 초기화
     document.addEventListener('DOMContentLoaded', init);
-
-    // Privacy Client 로드 대기
     window.addEventListener('load', () => {
         setTimeout(checkExtensionStatus, 1000);
     });

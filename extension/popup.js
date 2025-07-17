@@ -1,17 +1,19 @@
 // extension/popup.js
-// 개선된 팝업 UI 컨트롤러
+// 간소화된 팝업 컨트롤러 (CSP 호환)
 
-class PopupController {
+class SimplifiedPopupController {
     constructor() {
         this.settings = {
             enabled: false,
-            threshold: 50,
             mode: 'medical'
         };
 
         this.elements = {};
         this.isLoading = false;
+        this.serverConnected = false;
+        this.lastResult = null;
 
+        console.log('🛡️ PopupController 초기화 시작');
         this.init();
     }
 
@@ -21,6 +23,9 @@ class PopupController {
         this.setupEventListeners();
         this.checkServerStatus();
         this.updateUI();
+        this.startPeriodicCheck();
+
+        console.log('🛡️ PopupController 초기화 완료');
     }
 
     /**
@@ -28,70 +33,60 @@ class PopupController {
      */
     initElements() {
         this.elements = {
-            // 상태 관련
             statusToggle: document.getElementById('statusToggle'),
             detectedCount: document.getElementById('detectedCount'),
             maskedCount: document.getElementById('maskedCount'),
-            riskLevel: document.getElementById('riskLevel'),
-
-            // 서버 상태
-            serverStatus: document.getElementById('serverStatus'),
             serverIndicator: document.getElementById('serverIndicator'),
             serverText: document.getElementById('serverText'),
-            reconnectBtn: document.getElementById('reconnectBtn'),
-
-            // 설정
-            thresholdSlider: document.getElementById('thresholdSlider'),
-            thresholdValue: document.getElementById('thresholdValue'),
-            modeOptions: document.querySelectorAll('.mode-option'),
-
-            // 액션 버튼
-            scanBtn: document.getElementById('scanBtn'),
-            testBtn: document.getElementById('testBtn'),
-
-            // 결과
+            errorMessage: document.getElementById('errorMessage'),
             resultsSection: document.getElementById('resultsSection'),
             resultTime: document.getElementById('resultTime'),
             totalEntities: document.getElementById('totalEntities'),
-            maskedEntities: document.getElementById('maskedEntities'),
             avgRisk: document.getElementById('avgRisk'),
             entityDetails: document.getElementById('entityDetails')
         };
+
+        // 요소 존재 확인
+        Object.entries(this.elements).forEach(([key, element]) => {
+            if (!element) {
+                console.error(`❌ 요소를 찾을 수 없음: ${key}`);
+            } else {
+                console.log(`✅ 요소 발견: ${key}`);
+            }
+        });
     }
 
     /**
      * 이벤트 리스너 설정
      */
     setupEventListeners() {
-        // 상태 토글
-        this.elements.statusToggle.addEventListener('click', () => {
-            this.toggleProtection();
-        });
+        console.log('🎯 이벤트 리스너 설정 중...');
 
-        // 임계값 슬라이더
-        this.elements.thresholdSlider.addEventListener('input', (e) => {
-            this.updateThreshold(parseInt(e.target.value));
-        });
-
-        // 모드 선택
-        this.elements.modeOptions.forEach(option => {
-            option.addEventListener('click', () => {
-                this.selectMode(option.dataset.mode);
+        if (this.elements.statusToggle) {
+            // 클릭 이벤트
+            this.elements.statusToggle.addEventListener('click', (e) => {
+                console.log('🔄 토글 클릭됨!');
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggleProtection();
             });
-        });
 
-        // 액션 버튼들
-        this.elements.scanBtn.addEventListener('click', () => {
-            this.scanCurrentPage();
-        });
+            // 키보드 이벤트 (접근성)
+            this.elements.statusToggle.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    console.log('⌨️ 토글 키보드 입력됨!');
+                    e.preventDefault();
+                    this.toggleProtection();
+                }
+            });
 
-        this.elements.testBtn.addEventListener('click', () => {
-            this.testConnection();
-        });
+            // 포커스 가능하도록 설정
+            this.elements.statusToggle.setAttribute('tabindex', '0');
 
-        this.elements.reconnectBtn.addEventListener('click', () => {
-            this.reconnectServer();
-        });
+            console.log('✅ 토글 이벤트 리스너 설정 완료');
+        } else {
+            console.error('❌ statusToggle 요소를 찾을 수 없어 이벤트 리스너를 설정할 수 없습니다');
+        }
     }
 
     /**
@@ -99,12 +94,17 @@ class PopupController {
      */
     async loadSettings() {
         try {
+            console.log('📖 설정 로딩 중...');
             const result = await chrome.storage.sync.get(['privacyGuardSettings']);
             if (result.privacyGuardSettings) {
                 this.settings = { ...this.settings, ...result.privacyGuardSettings };
+                console.log('✅ 설정 로드 완료:', this.settings);
+            } else {
+                console.log('ℹ️ 저장된 설정이 없음, 기본값 사용');
             }
         } catch (error) {
-            console.warn('설정 로드 실패:', error);
+            console.error('❌ 설정 로드 실패:', error);
+            this.showError('설정을 불러올 수 없습니다');
         }
     }
 
@@ -113,9 +113,12 @@ class PopupController {
      */
     async saveSettings() {
         try {
+            console.log('💾 설정 저장 중...', this.settings);
             await chrome.storage.sync.set({ privacyGuardSettings: this.settings });
+            console.log('✅ 설정 저장 완료');
         } catch (error) {
-            console.warn('설정 저장 실패:', error);
+            console.error('❌ 설정 저장 실패:', error);
+            this.showError('설정을 저장할 수 없습니다');
         }
     }
 
@@ -123,117 +126,57 @@ class PopupController {
      * 보호 기능 토글
      */
     async toggleProtection() {
-        this.settings.enabled = !this.settings.enabled;
-        await this.saveSettings();
+        console.log('🔄 보호 기능 토글 시작, 현재 상태:', this.settings.enabled);
 
-        // 콘텐츠 스크립트에 알림
-        this.sendMessageToActiveTab({
-            action: 'toggleProtection',
-            enabled: this.settings.enabled
-        });
+        if (this.isLoading) {
+            console.log('⏳ 이미 처리 중이므로 무시');
+            return;
+        }
 
-        this.updateStatusUI();
-        this.showToast(this.settings.enabled ? '보호 기능 활성화됨' : '보호 기능 비활성화됨');
-    }
-
-    /**
-     * 임계값 업데이트
-     */
-    async updateThreshold(value) {
-        this.settings.threshold = value;
-        this.elements.thresholdValue.textContent = value;
-        await this.saveSettings();
-
-        this.sendMessageToActiveTab({
-            action: 'updateSettings',
-            settings: this.settings
-        });
-    }
-
-    /**
-     * 모드 선택
-     */
-    async selectMode(mode) {
-        this.settings.mode = mode;
-        await this.saveSettings();
-
-        // UI 업데이트
-        this.elements.modeOptions.forEach(option => {
-            option.classList.toggle('active', option.dataset.mode === mode);
-        });
-
-        this.sendMessageToActiveTab({
-            action: 'updateSettings',
-            settings: this.settings
-        });
-    }
-
-    /**
-     * 현재 페이지 스캔
-     */
-    async scanCurrentPage() {
-        if (this.isLoading) return;
-
-        this.setLoading(true, '페이지 스캔 중...');
+        this.isLoading = true;
 
         try {
+            // 상태 변경
+            this.settings.enabled = !this.settings.enabled;
+
+            // 즉시 UI 업데이트 (사용자 피드백)
+            this.updateStatusUI();
+
+            console.log('💾 새로운 상태로 설정 저장:', this.settings.enabled);
+            await this.saveSettings();
+
+            // 콘텐츠 스크립트에 알림
+            console.log('📨 콘텐츠 스크립트에 메시지 전송 중...');
             const response = await this.sendMessageToActiveTab({
-                action: 'scanPage'
+                action: 'toggleProtection',
+                enabled: this.settings.enabled,
+                settings: this.settings
             });
 
             if (response && response.success) {
-                this.displayScanResults(response);
-                this.showToast('스캔 완료');
+                console.log('✅ 콘텐츠 스크립트 응답 성공');
+                this.showMessage(
+                    this.settings.enabled ? '보호 기능 활성화됨' : '보호 기능 비활성화됨'
+                );
             } else {
-                throw new Error(response?.error || '스캔 실패');
-            }
-        } catch (error) {
-            console.error('스캔 오류:', error);
-            this.showToast('스캔 중 오류 발생', 'error');
-        } finally {
-            this.setLoading(false);
-        }
-    }
-
-    /**
-     * 연결 테스트
-     */
-    async testConnection() {
-        if (this.isLoading) return;
-
-        this.setLoading(true, '연결 테스트 중...');
-
-        try {
-            const response = await fetch('http://localhost:8000/health');
-            const data = await response.json();
-
-            this.updateServerStatus(true);
-            this.showToast('서버 연결 성공');
-
-            // 테스트 요청
-            const testResponse = await fetch('http://localhost:8000/api/test', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-
-            if (testResponse.ok) {
-                this.showToast('모델 테스트 완료');
+                console.warn('⚠️ 콘텐츠 스크립트 응답 실패, 하지만 로컬 상태는 변경됨');
+                this.showMessage(
+                    this.settings.enabled ? '보호 기능 활성화됨 (로컬)' : '보호 기능 비활성화됨 (로컬)'
+                );
             }
 
         } catch (error) {
-            console.error('연결 테스트 실패:', error);
-            this.updateServerStatus(false);
-            this.showToast('서버 연결 실패', 'error');
+            console.error('❌ 보호 기능 토글 실패:', error);
+            // 실패시 롤백
+            this.settings.enabled = !this.settings.enabled;
+            await this.saveSettings();
+            this.updateStatusUI();
+            this.showError('설정 변경에 실패했습니다: ' + error.message);
         } finally {
-            this.setLoading(false);
+            this.isLoading = false;
         }
-    }
 
-    /**
-     * 서버 재연결
-     */
-    async reconnectServer() {
-        await this.checkServerStatus();
+        console.log('🏁 보호 기능 토글 완료, 최종 상태:', this.settings.enabled);
     }
 
     /**
@@ -241,59 +184,184 @@ class PopupController {
      */
     async checkServerStatus() {
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
+
             const response = await fetch('http://localhost:8000/health', {
                 method: 'GET',
-                timeout: 3000
+                signal: controller.signal,
+                headers: {
+                    'Accept': 'application/json'
+                }
             });
 
-            this.updateServerStatus(response.ok);
+            clearTimeout(timeoutId);
+            this.serverConnected = response.ok;
+
+            if (this.serverConnected) {
+                const data = await response.json();
+                this.updateServerStatus(true, data);
+                this.hideError();
+                console.log('✅ 서버 연결 성공:', data.status || 'healthy');
+            } else {
+                throw new Error(`HTTP ${response.status}`);
+            }
+
         } catch (error) {
+            this.serverConnected = false;
             this.updateServerStatus(false);
+
+            if (error.name === 'AbortError') {
+                console.warn('⏱️ 서버 연결 시간 초과');
+                this.showError('서버 연결 시간 초과 - 로컬 모드로 동작');
+            } else {
+                console.warn('❌ 서버 연결 실패:', error.message);
+                this.showError('서버 연결 실패 - 로컬 모드로 동작');
+            }
         }
     }
 
     /**
      * 서버 상태 UI 업데이트
      */
-    updateServerStatus(connected) {
+    updateServerStatus(connected, serverData = null) {
         this.elements.serverIndicator.classList.toggle('connected', connected);
-        this.elements.serverText.textContent = connected ?
-            '서버 연결됨' : '서버 연결 안됨';
 
-        // 버튼 상태
-        this.elements.scanBtn.disabled = !connected || !this.settings.enabled;
-        this.elements.testBtn.disabled = false; // 테스트는 항상 가능
+        if (connected) {
+            this.elements.serverText.textContent = serverData?.status === 'healthy' ?
+                '서버 연결됨' : '서버 연결됨 (제한적)';
+        } else {
+            this.elements.serverText.textContent = '로컬 모드';
+        }
     }
 
     /**
-     * 스캔 결과 표시
+     * 활성 탭에 메시지 전송
      */
-    displayScanResults(response) {
-        const { stats, maskingLog = [] } = response;
+    async sendMessageToActiveTab(message) {
+        try {
+            console.log('📤 활성 탭에 메시지 전송:', message);
+
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (!tab) {
+                console.warn('⚠️ 활성 탭을 찾을 수 없음');
+                return { success: false, error: '활성 탭을 찾을 수 없습니다' };
+            }
+
+            console.log('📋 찾은 탭:', tab.url);
+
+            return new Promise((resolve) => {
+                const timeout = setTimeout(() => {
+                    console.warn('⏱️ 메시지 전송 시간 초과');
+                    resolve({ success: false, error: '메시지 전송 시간 초과' });
+                }, 5000);
+
+                chrome.tabs.sendMessage(tab.id, message, (response) => {
+                    clearTimeout(timeout);
+
+                    if (chrome.runtime.lastError) {
+                        console.warn('⚠️ 메시지 전송 실패:', chrome.runtime.lastError.message);
+                        resolve({ success: false, error: chrome.runtime.lastError.message });
+                    } else {
+                        console.log('📨 메시지 응답 받음:', response);
+                        resolve(response || { success: true });
+                    }
+                });
+            });
+
+        } catch (error) {
+            console.error('❌ 탭 메시지 오류:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    /**
+     * UI 상태 업데이트
+     */
+    updateUI() {
+        this.updateStatusUI();
+    }
+
+    /**
+     * 상태 UI 업데이트
+     */
+    updateStatusUI() {
+        console.log('🎨 UI 상태 업데이트:', this.settings.enabled);
+
+        if (this.elements.statusToggle) {
+            if (this.settings.enabled) {
+                this.elements.statusToggle.classList.add('active');
+                console.log('✅ 토글 활성화 스타일 적용');
+            } else {
+                this.elements.statusToggle.classList.remove('active');
+                console.log('❌ 토글 비활성화 스타일 적용');
+            }
+        } else {
+            console.error('❌ statusToggle 요소가 없음');
+        }
+    }
+
+    /**
+     * 최근 결과 가져오기
+     */
+    async fetchLastResult() {
+        if (!this.settings.enabled) return;
+
+        try {
+            const response = await this.sendMessageToActiveTab({
+                action: 'getLastResult'
+            });
+
+            if (response && response.result) {
+                this.lastResult = response.result;
+                this.displayResult(this.lastResult);
+            }
+
+        } catch (error) {
+            console.warn('결과 가져오기 실패:', error);
+        }
+    }
+
+    /**
+     * 결과 표시
+     */
+    displayResult(result) {
+        if (!result || !result.stats) {
+            this.elements.resultsSection.classList.remove('show');
+            return;
+        }
+
+        const { stats, maskingLog = [] } = result;
 
         // 통계 업데이트
         this.elements.totalEntities.textContent = stats.totalEntities || 0;
-        this.elements.maskedEntities.textContent = stats.maskedEntities || 0;
         this.elements.avgRisk.textContent = `${stats.avgRisk || 0}%`;
         this.elements.resultTime.textContent = new Date().toLocaleTimeString();
 
         // 상단 요약 업데이트
         this.elements.detectedCount.textContent = stats.totalEntities || 0;
         this.elements.maskedCount.textContent = stats.maskedEntities || 0;
-        this.elements.riskLevel.textContent = `${stats.avgRisk || 0}%`;
 
-        // 상세 정보
+        // 상세 정보 (최대 3개만 표시)
         if (maskingLog && maskingLog.length > 0) {
-            this.elements.entityDetails.innerHTML = maskingLog.map(log => `
+            this.elements.entityDetails.innerHTML = maskingLog.slice(0, 3).map(log => `
                 <div class="entity-item">
-                    <span class="entity-type">${log.entity || 'UNKNOWN'}</span>
-                    <span class="entity-text">${log.token || ''}</span>
+                    <span class="entity-type">${this.formatEntityType(log.entity)}</span>
+                    <span class="entity-text">${this.truncateText(log.token, 10)}</span>
                     <span class="entity-risk">${log.risk_weight || 0}%</span>
                 </div>
             `).join('');
+
+            if (maskingLog.length > 3) {
+                this.elements.entityDetails.innerHTML += `
+                    <div style="text-align: center; color: #666; padding: 8px; font-size: 10px;">
+                        +${maskingLog.length - 3}개 더
+                    </div>
+                `;
+            }
         } else {
             this.elements.entityDetails.innerHTML = `
-                <div style="text-align: center; color: #666; padding: 20px;">
+                <div style="text-align: center; color: #666; padding: 12px; font-size: 11px;">
                     민감정보가 감지되지 않았습니다
                 </div>
             `;
@@ -304,107 +372,143 @@ class PopupController {
     }
 
     /**
-     * UI 상태 업데이트
+     * 주기적 업데이트 시작
      */
-    updateUI() {
-        this.updateStatusUI();
-        this.updateControlsUI();
-    }
+    startPeriodicCheck() {
+        // 서버 상태 체크 (30초마다)
+        setInterval(() => {
+            this.checkServerStatus();
+        }, 30000);
 
-    updateStatusUI() {
-        this.elements.statusToggle.classList.toggle('active', this.settings.enabled);
-    }
-
-    updateControlsUI() {
-        this.elements.thresholdSlider.value = this.settings.threshold;
-        this.elements.thresholdValue.textContent = this.settings.threshold;
-
-        this.elements.modeOptions.forEach(option => {
-            option.classList.toggle('active', option.dataset.mode === this.settings.mode);
-        });
-    }
-
-    /**
-     * 로딩 상태 설정
-     */
-    setLoading(loading, message = '') {
-        this.isLoading = loading;
-
-        const buttons = [this.elements.scanBtn, this.elements.testBtn];
-        buttons.forEach(btn => {
-            btn.disabled = loading;
-            if (loading) {
-                btn.innerHTML = `
-                    <div class="loading">
-                        <div class="spinner"></div>
-                        <span>${message}</span>
-                    </div>
-                `;
-            } else {
-                // 원래 텍스트로 복원
-                if (btn === this.elements.scanBtn) {
-                    btn.innerHTML = '🔍 현재 페이지 스캔';
-                } else if (btn === this.elements.testBtn) {
-                    btn.innerHTML = '🧪 연결 테스트';
-                }
+        // 결과 업데이트 (3초마다, 활성화된 경우만)
+        setInterval(() => {
+            if (this.settings.enabled) {
+                this.fetchLastResult();
             }
-        });
+        }, 3000);
     }
 
     /**
-     * 활성 탭에 메시지 전송
+     * 에러 메시지 표시
      */
-    async sendMessageToActiveTab(message) {
-        try {
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (!tab) throw new Error('활성 탭을 찾을 수 없습니다');
+    showError(message) {
+        console.error('🚨 에러 표시:', message);
 
-            return new Promise((resolve) => {
-                chrome.tabs.sendMessage(tab.id, message, (response) => {
-                    if (chrome.runtime.lastError) {
-                        console.warn('메시지 전송 실패:', chrome.runtime.lastError);
-                        resolve(null);
-                    } else {
-                        resolve(response);
-                    }
-                });
-            });
-        } catch (error) {
-            console.error('탭 메시지 오류:', error);
-            return null;
-        }
+        this.elements.errorMessage.textContent = message;
+        this.elements.errorMessage.classList.add('show');
+
+        // 5초 후 자동 숨김
+        setTimeout(() => {
+            this.hideError();
+        }, 5000);
     }
 
     /**
-     * 토스트 메시지 표시
+     * 에러 메시지 숨김
      */
-    showToast(message, type = 'success') {
-        const toast = document.createElement('div');
-        toast.className = `toast toast-${type}`;
-        toast.textContent = message;
-        toast.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: ${type === 'error' ? '#e74c3c' : '#2ed573'};
-            color: white;
-            padding: 12px 16px;
-            border-radius: 6px;
-            font-size: 12px;
-            z-index: 1000;
-            animation: slideIn 0.3s ease;
-        `;
+    hideError() {
+        this.elements.errorMessage.classList.remove('show');
+    }
 
-        document.body.appendChild(toast);
+    /**
+     * 임시 메시지 표시 (서버 텍스트 영역 활용)
+     */
+    showMessage(message) {
+        console.log('💬 메시지 표시:', message);
+
+        const originalText = this.elements.serverText.textContent;
+        const originalColor = this.elements.serverText.style.color;
+        const originalWeight = this.elements.serverText.style.fontWeight;
+
+        this.elements.serverText.textContent = message;
+        this.elements.serverText.style.color = '#2ed573';
+        this.elements.serverText.style.fontWeight = '600';
 
         setTimeout(() => {
-            toast.style.animation = 'slideOut 0.3s ease';
-            setTimeout(() => toast.remove(), 300);
+            this.elements.serverText.textContent = originalText;
+            this.elements.serverText.style.color = originalColor;
+            this.elements.serverText.style.fontWeight = originalWeight;
         }, 2000);
+    }
+
+    /**
+     * 헬퍼 함수들
+     */
+    formatEntityType(type) {
+        const typeMap = {
+            'person': '이름',
+            'phone': '연락처',
+            'hospital': '병원',
+            'disease': '질병',
+            'date': '날짜',
+            'id_number': '주민번호'
+        };
+        return typeMap[type] || type?.toUpperCase() || 'UNKNOWN';
+    }
+
+    truncateText(text, maxLength) {
+        if (!text) return '';
+        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
     }
 }
 
 // 팝업 로드 시 초기화
 document.addEventListener('DOMContentLoaded', () => {
-    new PopupController();
+    console.log('📄 DOM 준비됨, PopupController 초기화 시작');
+
+    try {
+        window.popupController = new SimplifiedPopupController();
+        console.log('✅ PopupController 인스턴스 생성 완료');
+    } catch (error) {
+        console.error('❌ 팝업 초기화 실패:', error);
+
+        // 기본 에러 표시
+        const errorDiv = document.getElementById('errorMessage');
+        if (errorDiv) {
+            errorDiv.textContent = '초기화 중 오류가 발생했습니다: ' + error.message;
+            errorDiv.classList.add('show');
+        }
+
+        // 수동으로 토글 기능 추가 (fallback)
+        const toggle = document.getElementById('statusToggle');
+        if (toggle) {
+            console.log('🔧 Fallback 토글 기능 추가');
+            toggle.addEventListener('click', () => {
+                console.log('🔄 Fallback 토글 클릭됨');
+                toggle.classList.toggle('active');
+            });
+        }
+    }
 });
+
+// 전역 에러 핸들러
+window.addEventListener('error', (event) => {
+    console.error('🌍 팝업 전역 오류:', event.error);
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+    console.error('🌍 팝업 Promise 거부:', event.reason);
+});
+
+// 디버깅용 전역 함수
+window.debugToggle = function() {
+    const toggle = document.getElementById('statusToggle');
+    if (toggle) {
+        console.log('🐛 디버그 토글 실행');
+        toggle.click();
+    } else {
+        console.error('🐛 토글 요소를 찾을 수 없음');
+    }
+};
+
+window.debugElements = function() {
+    const elements = [
+        'statusToggle', 'detectedCount', 'maskedCount',
+        'serverIndicator', 'serverText', 'errorMessage'
+    ];
+
+    elements.forEach(id => {
+        const element = document.getElementById(id);
+        console.log(`🐛 ${id}:`, element ? '존재함' : '없음', element);
+    });
+};
