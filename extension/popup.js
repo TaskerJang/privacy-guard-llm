@@ -1,31 +1,37 @@
 // extension/popup.js
-// 간소화된 팝업 컨트롤러 (CSP 호환)
+// 개선된 팝업 컨트롤러 - 상태 유지 및 자동 동기화
 
-class SimplifiedPopupController {
+class ImprovedPopupController {
     constructor() {
         this.settings = {
             enabled: false,
-            mode: 'medical'
+            mode: 'medical',
+            threshold: 50
         };
 
         this.elements = {};
         this.isLoading = false;
         this.serverConnected = false;
         this.lastResult = null;
+        this.updateInterval = null;
 
-        console.log('🛡️ PopupController 초기화 시작');
+        console.log('🛡️ 개선된 PopupController 초기화 시작');
         this.init();
     }
 
-    init() {
+    async init() {
         this.initElements();
-        this.loadSettings();
+        await this.loadSettings();
         this.setupEventListeners();
-        this.checkServerStatus();
-        this.updateUI();
-        this.startPeriodicCheck();
+        await this.checkServerStatus();
 
-        console.log('🛡️ PopupController 초기화 완료');
+        // UI 초기 상태 설정
+        this.updateUI();
+
+        // 실시간 동기화 시작
+        this.startRealTimeSync();
+
+        console.log('🛡️ PopupController 초기화 완료', this.settings);
     }
 
     /**
@@ -50,8 +56,6 @@ class SimplifiedPopupController {
         Object.entries(this.elements).forEach(([key, element]) => {
             if (!element) {
                 console.error(`❌ 요소를 찾을 수 없음: ${key}`);
-            } else {
-                console.log(`✅ 요소 발견: ${key}`);
             }
         });
     }
@@ -60,47 +64,44 @@ class SimplifiedPopupController {
      * 이벤트 리스너 설정
      */
     setupEventListeners() {
-        console.log('🎯 이벤트 리스너 설정 중...');
-
         if (this.elements.statusToggle) {
-            // 클릭 이벤트
             this.elements.statusToggle.addEventListener('click', (e) => {
-                console.log('🔄 토글 클릭됨!');
                 e.preventDefault();
                 e.stopPropagation();
                 this.toggleProtection();
             });
 
-            // 키보드 이벤트 (접근성)
             this.elements.statusToggle.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
-                    console.log('⌨️ 토글 키보드 입력됨!');
                     e.preventDefault();
                     this.toggleProtection();
                 }
             });
 
-            // 포커스 가능하도록 설정
             this.elements.statusToggle.setAttribute('tabindex', '0');
-
-            console.log('✅ 토글 이벤트 리스너 설정 완료');
-        } else {
-            console.error('❌ statusToggle 요소를 찾을 수 없어 이벤트 리스너를 설정할 수 없습니다');
         }
+
+        // 스토리지 변경 감지
+        chrome.storage.onChanged.addListener((changes, namespace) => {
+            if (namespace === 'sync' && changes.privacyGuardSettings) {
+                this.onSettingsChanged(changes.privacyGuardSettings.newValue);
+            }
+        });
     }
 
     /**
-     * 설정 로드
+     * 설정 로드 - 항상 최신 상태 보장
      */
     async loadSettings() {
         try {
-            console.log('📖 설정 로딩 중...');
             const result = await chrome.storage.sync.get(['privacyGuardSettings']);
             if (result.privacyGuardSettings) {
                 this.settings = { ...this.settings, ...result.privacyGuardSettings };
                 console.log('✅ 설정 로드 완료:', this.settings);
             } else {
-                console.log('ℹ️ 저장된 설정이 없음, 기본값 사용');
+                // 기본 설정으로 초기화
+                await this.saveSettings();
+                console.log('ℹ️ 기본 설정으로 초기화됨');
             }
         } catch (error) {
             console.error('❌ 설정 로드 실패:', error);
@@ -113,70 +114,99 @@ class SimplifiedPopupController {
      */
     async saveSettings() {
         try {
-            console.log('💾 설정 저장 중...', this.settings);
             await chrome.storage.sync.set({ privacyGuardSettings: this.settings });
-            console.log('✅ 설정 저장 완료');
+            console.log('✅ 설정 저장 완료:', this.settings);
+
+            // 모든 탭의 content script에 설정 변경 알림
+            await this.broadcastSettingsChange();
         } catch (error) {
             console.error('❌ 설정 저장 실패:', error);
-            this.showError('설정을 저장할 수 없습니다');
+            throw error;
         }
     }
 
     /**
-     * 보호 기능 토글
+     * 설정 변경 브로드캐스트
      */
-    async toggleProtection() {
-        console.log('🔄 보호 기능 토글 시작, 현재 상태:', this.settings.enabled);
-
-        if (this.isLoading) {
-            console.log('⏳ 이미 처리 중이므로 무시');
-            return;
-        }
-
-        this.isLoading = true;
-
+    async broadcastSettingsChange() {
         try {
-            // 상태 변경
-            this.settings.enabled = !this.settings.enabled;
-
-            // 즉시 UI 업데이트 (사용자 피드백)
-            this.updateStatusUI();
-
-            console.log('💾 새로운 상태로 설정 저장:', this.settings.enabled);
-            await this.saveSettings();
-
-            // 콘텐츠 스크립트에 알림
-            console.log('📨 콘텐츠 스크립트에 메시지 전송 중...');
-            const response = await this.sendMessageToActiveTab({
-                action: 'toggleProtection',
-                enabled: this.settings.enabled,
+            const tabs = await chrome.tabs.query({});
+            const message = {
+                action: 'updateSettings',
                 settings: this.settings
+            };
+
+            // 모든 탭에 설정 변경 알림
+            const promises = tabs.map(tab => {
+                return new Promise((resolve) => {
+                    chrome.tabs.sendMessage(tab.id, message, (response) => {
+                        // 에러 무시 (content script가 없는 탭도 있음)
+                        resolve();
+                    });
+                });
             });
 
-            if (response && response.success) {
-                console.log('✅ 콘텐츠 스크립트 응답 성공');
-                this.showMessage(
-                    this.settings.enabled ? '보호 기능 활성화됨' : '보호 기능 비활성화됨'
-                );
-            } else {
-                console.warn('⚠️ 콘텐츠 스크립트 응답 실패, 하지만 로컬 상태는 변경됨');
-                this.showMessage(
-                    this.settings.enabled ? '보호 기능 활성화됨 (로컬)' : '보호 기능 비활성화됨 (로컬)'
-                );
+            await Promise.all(promises);
+            console.log('📡 설정 변경 브로드캐스트 완료');
+        } catch (error) {
+            console.warn('⚠️ 설정 브로드캐스트 실패:', error);
+        }
+    }
+
+    /**
+     * 스토리지 변경 감지 시 호출
+     */
+    onSettingsChanged(newSettings) {
+        if (newSettings) {
+            const oldEnabled = this.settings.enabled;
+            this.settings = { ...this.settings, ...newSettings };
+
+            // UI 업데이트
+            this.updateUI();
+
+            // 상태 변경 로그
+            if (oldEnabled !== this.settings.enabled) {
+                console.log(`🔄 상태 변경 감지: ${this.settings.enabled ? '활성화' : '비활성화'}`);
             }
+        }
+    }
+
+    /**
+     * 보호 기능 토글 - 개선된 버전
+     */
+    async toggleProtection() {
+        if (this.isLoading) return;
+
+        this.isLoading = true;
+        const newState = !this.settings.enabled;
+
+        try {
+            // UI 즉시 업데이트 (사용자 피드백)
+            this.updateToggleUI(newState);
+            this.showLoadingState();
+
+            // 설정 업데이트
+            this.settings.enabled = newState;
+            await this.saveSettings();
+
+            // 성공 메시지
+            this.showMessage(
+                newState ? '보호 기능이 활성화되었습니다' : '보호 기능이 비활성화되었습니다'
+            );
+
+            console.log(`🔄 보호 기능 토글 완료: ${newState}`);
 
         } catch (error) {
             console.error('❌ 보호 기능 토글 실패:', error);
-            // 실패시 롤백
-            this.settings.enabled = !this.settings.enabled;
-            await this.saveSettings();
-            this.updateStatusUI();
-            this.showError('설정 변경에 실패했습니다: ' + error.message);
+
+            // 실패 시 롤백
+            this.settings.enabled = !newState;
+            this.updateToggleUI(this.settings.enabled);
+            this.showError('설정 변경에 실패했습니다');
         } finally {
             this.isLoading = false;
+            this.hideLoadingState();
         }
-
-        console.log('🏁 보호 기능 토글 완료, 최종 상태:', this.settings.enabled);
     }
 
     /**
@@ -190,9 +220,7 @@ class SimplifiedPopupController {
             const response = await fetch('http://localhost:8000/health', {
                 method: 'GET',
                 signal: controller.signal,
-                headers: {
-                    'Accept': 'application/json'
-                }
+                headers: { 'Accept': 'application/json' }
             });
 
             clearTimeout(timeoutId);
@@ -201,8 +229,7 @@ class SimplifiedPopupController {
             if (this.serverConnected) {
                 const data = await response.json();
                 this.updateServerStatus(true, data);
-                this.hideError();
-                console.log('✅ 서버 연결 성공:', data.status || 'healthy');
+                console.log('✅ 서버 연결 성공');
             } else {
                 throw new Error(`HTTP ${response.status}`);
             }
@@ -210,13 +237,60 @@ class SimplifiedPopupController {
         } catch (error) {
             this.serverConnected = false;
             this.updateServerStatus(false);
+            console.warn('⚠️ 서버 연결 실패 - 로컬 모드로 동작');
+        }
+    }
 
-            if (error.name === 'AbortError') {
-                console.warn('⏱️ 서버 연결 시간 초과');
-                this.showError('서버 연결 시간 초과 - 로컬 모드로 동작');
+    /**
+     * 실시간 동기화 시작
+     */
+    startRealTimeSync() {
+        // 설정 상태 주기적 확인 (5초마다)
+        this.updateInterval = setInterval(async () => {
+            try {
+                // 현재 저장된 설정과 비교
+                const result = await chrome.storage.sync.get(['privacyGuardSettings']);
+                const storedSettings = result.privacyGuardSettings;
+
+                if (storedSettings && storedSettings.enabled !== this.settings.enabled) {
+                    console.log('🔄 외부 설정 변경 감지, UI 동기화');
+                    this.settings = { ...this.settings, ...storedSettings };
+                    this.updateUI();
+                }
+
+                // 보호 기능이 활성화된 경우 최근 결과 확인
+                if (this.settings.enabled) {
+                    await this.fetchLastResult();
+                }
+
+            } catch (error) {
+                console.warn('⚠️ 실시간 동기화 오류:', error);
+            }
+        }, 5000);
+
+        // 서버 상태 주기적 확인 (30초마다)
+        setInterval(() => {
+            this.checkServerStatus();
+        }, 30000);
+    }
+
+    /**
+     * UI 업데이트 - 전체
+     */
+    updateUI() {
+        this.updateToggleUI(this.settings.enabled);
+        this.updateServerStatus(this.serverConnected);
+    }
+
+    /**
+     * 토글 UI 업데이트
+     */
+    updateToggleUI(enabled) {
+        if (this.elements.statusToggle) {
+            if (enabled) {
+                this.elements.statusToggle.classList.add('active');
             } else {
-                console.warn('❌ 서버 연결 실패:', error.message);
-                this.showError('서버 연결 실패 - 로컬 모드로 동작');
+                this.elements.statusToggle.classList.remove('active');
             }
         }
     }
@@ -225,79 +299,17 @@ class SimplifiedPopupController {
      * 서버 상태 UI 업데이트
      */
     updateServerStatus(connected, serverData = null) {
-        this.elements.serverIndicator.classList.toggle('connected', connected);
-
-        if (connected) {
-            this.elements.serverText.textContent = serverData?.status === 'healthy' ?
-                '서버 연결됨' : '서버 연결됨 (제한적)';
-        } else {
-            this.elements.serverText.textContent = '로컬 모드';
+        if (this.elements.serverIndicator) {
+            this.elements.serverIndicator.classList.toggle('connected', connected);
         }
-    }
 
-    /**
-     * 활성 탭에 메시지 전송
-     */
-    async sendMessageToActiveTab(message) {
-        try {
-            console.log('📤 활성 탭에 메시지 전송:', message);
-
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            if (!tab) {
-                console.warn('⚠️ 활성 탭을 찾을 수 없음');
-                return { success: false, error: '활성 탭을 찾을 수 없습니다' };
-            }
-
-            console.log('📋 찾은 탭:', tab.url);
-
-            return new Promise((resolve) => {
-                const timeout = setTimeout(() => {
-                    console.warn('⏱️ 메시지 전송 시간 초과');
-                    resolve({ success: false, error: '메시지 전송 시간 초과' });
-                }, 5000);
-
-                chrome.tabs.sendMessage(tab.id, message, (response) => {
-                    clearTimeout(timeout);
-
-                    if (chrome.runtime.lastError) {
-                        console.warn('⚠️ 메시지 전송 실패:', chrome.runtime.lastError.message);
-                        resolve({ success: false, error: chrome.runtime.lastError.message });
-                    } else {
-                        console.log('📨 메시지 응답 받음:', response);
-                        resolve(response || { success: true });
-                    }
-                });
-            });
-
-        } catch (error) {
-            console.error('❌ 탭 메시지 오류:', error);
-            return { success: false, error: error.message };
-        }
-    }
-
-    /**
-     * UI 상태 업데이트
-     */
-    updateUI() {
-        this.updateStatusUI();
-    }
-
-    /**
-     * 상태 UI 업데이트
-     */
-    updateStatusUI() {
-        console.log('🎨 UI 상태 업데이트:', this.settings.enabled);
-
-        if (this.elements.statusToggle) {
-            if (this.settings.enabled) {
-                this.elements.statusToggle.classList.add('active');
-                console.log('✅ 토글 활성화 스타일 적용');
+        if (this.elements.serverText) {
+            if (connected) {
+                this.elements.serverText.textContent =
+                    serverData?.status === 'healthy' ? '서버 연결됨' : '서버 연결됨 (제한적)';
             } else {
-                this.elements.statusToggle.classList.remove('active');
-                console.log('❌ 토글 비활성화 스타일 적용');
+                this.elements.serverText.textContent = '로컬 모드';
             }
-        } else {
-            console.error('❌ statusToggle 요소가 없음');
         }
     }
 
@@ -305,11 +317,12 @@ class SimplifiedPopupController {
      * 최근 결과 가져오기
      */
     async fetchLastResult() {
-        if (!this.settings.enabled) return;
-
         try {
-            const response = await this.sendMessageToActiveTab({
-                action: 'getLastResult'
+            const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (!tabs[0]) return;
+
+            const response = await new Promise((resolve) => {
+                chrome.tabs.sendMessage(tabs[0].id, { action: 'getLastResult' }, resolve);
             });
 
             if (response && response.result) {
@@ -318,7 +331,7 @@ class SimplifiedPopupController {
             }
 
         } catch (error) {
-            console.warn('결과 가져오기 실패:', error);
+            console.warn('⚠️ 결과 가져오기 실패:', error);
         }
     }
 
@@ -327,23 +340,35 @@ class SimplifiedPopupController {
      */
     displayResult(result) {
         if (!result || !result.stats) {
-            this.elements.resultsSection.classList.remove('show');
+            if (this.elements.resultsSection) {
+                this.elements.resultsSection.classList.remove('show');
+            }
             return;
         }
 
         const { stats, maskingLog = [] } = result;
 
         // 통계 업데이트
-        this.elements.totalEntities.textContent = stats.totalEntities || 0;
-        this.elements.avgRisk.textContent = `${stats.avgRisk || 0}%`;
-        this.elements.resultTime.textContent = new Date().toLocaleTimeString();
+        if (this.elements.totalEntities) {
+            this.elements.totalEntities.textContent = stats.totalEntities || 0;
+        }
+        if (this.elements.avgRisk) {
+            this.elements.avgRisk.textContent = `${stats.avgRisk || 0}%`;
+        }
+        if (this.elements.resultTime) {
+            this.elements.resultTime.textContent = new Date().toLocaleTimeString();
+        }
 
         // 상단 요약 업데이트
-        this.elements.detectedCount.textContent = stats.totalEntities || 0;
-        this.elements.maskedCount.textContent = stats.maskedEntities || 0;
+        if (this.elements.detectedCount) {
+            this.elements.detectedCount.textContent = stats.totalEntities || 0;
+        }
+        if (this.elements.maskedCount) {
+            this.elements.maskedCount.textContent = stats.maskedEntities || 0;
+        }
 
-        // 상세 정보 (최대 3개만 표시)
-        if (maskingLog && maskingLog.length > 0) {
+        // 상세 정보 표시
+        if (this.elements.entityDetails && maskingLog.length > 0) {
             this.elements.entityDetails.innerHTML = maskingLog.slice(0, 3).map(log => `
                 <div class="entity-item">
                     <span class="entity-type">${this.formatEntityType(log.entity)}</span>
@@ -359,76 +384,60 @@ class SimplifiedPopupController {
                     </div>
                 `;
             }
-        } else {
-            this.elements.entityDetails.innerHTML = `
-                <div style="text-align: center; color: #666; padding: 12px; font-size: 11px;">
-                    민감정보가 감지되지 않았습니다
-                </div>
-            `;
         }
 
         // 결과 섹션 표시
-        this.elements.resultsSection.classList.add('show', 'slide-in');
+        if (this.elements.resultsSection) {
+            this.elements.resultsSection.classList.add('show', 'slide-in');
+        }
     }
 
     /**
-     * 주기적 업데이트 시작
+     * 로딩 상태 표시
      */
-    startPeriodicCheck() {
-        // 서버 상태 체크 (30초마다)
-        setInterval(() => {
-            this.checkServerStatus();
-        }, 30000);
+    showLoadingState() {
+        if (this.elements.statusToggle) {
+            this.elements.statusToggle.style.opacity = '0.6';
+            this.elements.statusToggle.style.pointerEvents = 'none';
+        }
+    }
 
-        // 결과 업데이트 (3초마다, 활성화된 경우만)
-        setInterval(() => {
-            if (this.settings.enabled) {
-                this.fetchLastResult();
-            }
-        }, 3000);
+    hideLoadingState() {
+        if (this.elements.statusToggle) {
+            this.elements.statusToggle.style.opacity = '';
+            this.elements.statusToggle.style.pointerEvents = '';
+        }
     }
 
     /**
-     * 에러 메시지 표시
-     */
-    showError(message) {
-        console.error('🚨 에러 표시:', message);
-
-        this.elements.errorMessage.textContent = message;
-        this.elements.errorMessage.classList.add('show');
-
-        // 5초 후 자동 숨김
-        setTimeout(() => {
-            this.hideError();
-        }, 5000);
-    }
-
-    /**
-     * 에러 메시지 숨김
-     */
-    hideError() {
-        this.elements.errorMessage.classList.remove('show');
-    }
-
-    /**
-     * 임시 메시지 표시 (서버 텍스트 영역 활용)
+     * 메시지 및 에러 처리
      */
     showMessage(message) {
-        console.log('💬 메시지 표시:', message);
+        if (this.elements.serverText) {
+            const originalText = this.elements.serverText.textContent;
+            const originalColor = this.elements.serverText.style.color;
 
-        const originalText = this.elements.serverText.textContent;
-        const originalColor = this.elements.serverText.style.color;
-        const originalWeight = this.elements.serverText.style.fontWeight;
+            this.elements.serverText.textContent = message;
+            this.elements.serverText.style.color = '#2ed573';
+            this.elements.serverText.style.fontWeight = '600';
 
-        this.elements.serverText.textContent = message;
-        this.elements.serverText.style.color = '#2ed573';
-        this.elements.serverText.style.fontWeight = '600';
+            setTimeout(() => {
+                this.elements.serverText.textContent = originalText;
+                this.elements.serverText.style.color = originalColor;
+                this.elements.serverText.style.fontWeight = '';
+            }, 2000);
+        }
+    }
 
-        setTimeout(() => {
-            this.elements.serverText.textContent = originalText;
-            this.elements.serverText.style.color = originalColor;
-            this.elements.serverText.style.fontWeight = originalWeight;
-        }, 2000);
+    showError(message) {
+        if (this.elements.errorMessage) {
+            this.elements.errorMessage.textContent = message;
+            this.elements.errorMessage.classList.add('show');
+
+            setTimeout(() => {
+                this.elements.errorMessage.classList.remove('show');
+            }, 5000);
+        }
     }
 
     /**
@@ -450,65 +459,52 @@ class SimplifiedPopupController {
         if (!text) return '';
         return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
     }
+
+    /**
+     * 정리 함수
+     */
+    cleanup() {
+        if (this.updateInterval) {
+            clearInterval(this.updateInterval);
+        }
+    }
 }
 
 // 팝업 로드 시 초기화
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('📄 DOM 준비됨, PopupController 초기화 시작');
+    console.log('📄 DOM 준비됨, 개선된 PopupController 초기화');
 
     try {
-        window.popupController = new SimplifiedPopupController();
-        console.log('✅ PopupController 인스턴스 생성 완료');
+        window.popupController = new ImprovedPopupController();
     } catch (error) {
         console.error('❌ 팝업 초기화 실패:', error);
 
-        // 기본 에러 표시
-        const errorDiv = document.getElementById('errorMessage');
-        if (errorDiv) {
-            errorDiv.textContent = '초기화 중 오류가 발생했습니다: ' + error.message;
-            errorDiv.classList.add('show');
-        }
-
-        // 수동으로 토글 기능 추가 (fallback)
+        // Fallback 토글 기능
         const toggle = document.getElementById('statusToggle');
         if (toggle) {
-            console.log('🔧 Fallback 토글 기능 추가');
             toggle.addEventListener('click', () => {
-                console.log('🔄 Fallback 토글 클릭됨');
                 toggle.classList.toggle('active');
             });
         }
     }
 });
 
-// 전역 에러 핸들러
-window.addEventListener('error', (event) => {
-    console.error('🌍 팝업 전역 오류:', event.error);
+// 페이지 언로드 시 정리
+window.addEventListener('beforeunload', () => {
+    if (window.popupController) {
+        window.popupController.cleanup();
+    }
 });
 
-window.addEventListener('unhandledrejection', (event) => {
-    console.error('🌍 팝업 Promise 거부:', event.reason);
-});
-
-// 디버깅용 전역 함수
+// 디버깅 함수들
 window.debugToggle = function() {
-    const toggle = document.getElementById('statusToggle');
-    if (toggle) {
-        console.log('🐛 디버그 토글 실행');
-        toggle.click();
-    } else {
-        console.error('🐛 토글 요소를 찾을 수 없음');
+    if (window.popupController) {
+        window.popupController.toggleProtection();
     }
 };
 
-window.debugElements = function() {
-    const elements = [
-        'statusToggle', 'detectedCount', 'maskedCount',
-        'serverIndicator', 'serverText', 'errorMessage'
-    ];
-
-    elements.forEach(id => {
-        const element = document.getElementById(id);
-        console.log(`🐛 ${id}:`, element ? '존재함' : '없음', element);
-    });
+window.debugStatus = function() {
+    if (window.popupController) {
+        console.log('현재 상태:', window.popupController.settings);
+    }
 };

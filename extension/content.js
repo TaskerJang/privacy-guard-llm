@@ -1,7 +1,7 @@
 // extension/content.js
-// 개선된 컨텐츠 스크립트 - 통신 문제 해결
+// 문법 오류 수정된 컨텐츠 스크립트
 
-class PrivacyGuardContent {
+class ImprovedPrivacyGuardContent {
     constructor() {
         this.isEnabled = false;
         this.settings = {
@@ -12,48 +12,153 @@ class PrivacyGuardContent {
         this.lastResult = null;
         this.isProcessing = false;
         this.serverAvailable = false;
+        this.settingsUpdateInterval = null;
 
         // 모니터링할 요소들
         this.textInputs = new Set();
         this.observedElements = new WeakSet();
 
+        console.log('🛡️ 개선된 Privacy Guard Content Script 초기화');
         this.init();
     }
 
     async init() {
-        console.log('🛡️ Privacy Guard Content Script 초기화');
+        try {
+            // 설정 로드 및 상태 동기화
+            await this.loadAndSyncSettings();
 
-        // 설정 로드
-        await this.loadSettings();
+            // 서버 상태 확인
+            await this.checkServerAvailability();
 
-        // 서버 상태 확인
-        await this.checkServerAvailability();
+            // DOM 감시 시작
+            this.startDOMObserver();
 
-        // DOM 감시 시작
-        this.startDOMObserver();
+            // 메시지 리스너 설정
+            this.setupMessageListeners();
 
-        // 메시지 리스너 설정
-        this.setupMessageListeners();
+            // 실시간 설정 동기화 시작
+            this.startSettingsSync();
 
-        // 주기적 서버 체크
-        this.startPeriodicServerCheck();
+            // 주기적 서버 체크
+            this.startPeriodicServerCheck();
 
-        console.log(`🛡️ Privacy Guard 준비 완료 (활성: ${this.isEnabled}, 서버: ${this.serverAvailable})`);
+            console.log(`🛡️ Privacy Guard 준비 완료 (활성: ${this.isEnabled}, 서버: ${this.serverAvailable})`);
+
+            // demo-page에 상태 알림
+            this.notifyDemoPage();
+        } catch (error) {
+            console.error('❌ Privacy Guard 초기화 실패:', error);
+        }
     }
 
     /**
-     * 설정 로드
+     * 설정 로드 및 동기화
      */
-    async loadSettings() {
+    async loadAndSyncSettings() {
         try {
             const result = await chrome.storage.sync.get(['privacyGuardSettings']);
             if (result.privacyGuardSettings) {
                 const settings = result.privacyGuardSettings;
                 this.isEnabled = settings.enabled || false;
                 this.settings = { ...this.settings, ...settings };
+                console.log('✅ 설정 로드 완료:', this.settings);
+            } else {
+                // 기본 설정 저장
+                await this.saveDefaultSettings();
             }
         } catch (error) {
-            console.warn('설정 로드 실패:', error);
+            console.warn('⚠️ 설정 로드 실패:', error);
+        }
+    }
+
+    /**
+     * 기본 설정 저장
+     */
+    async saveDefaultSettings() {
+        try {
+            const defaultSettings = {
+                enabled: false,
+                mode: 'medical',
+                threshold: 50
+            };
+
+            await chrome.storage.sync.set({ privacyGuardSettings: defaultSettings });
+            this.settings = defaultSettings;
+            console.log('📝 기본 설정 저장 완료');
+        } catch (error) {
+            console.warn('⚠️ 기본 설정 저장 실패:', error);
+        }
+    }
+
+    /**
+     * 실시간 설정 동기화
+     */
+    startSettingsSync() {
+        // 스토리지 변경 감지
+        if (chrome.storage && chrome.storage.onChanged) {
+            chrome.storage.onChanged.addListener((changes, namespace) => {
+                if (namespace === 'sync' && changes.privacyGuardSettings) {
+                    this.onSettingsChanged(changes.privacyGuardSettings.newValue);
+                }
+            });
+        }
+
+        // 주기적 설정 확인 (5초마다)
+        this.settingsUpdateInterval = setInterval(async () => {
+            try {
+                const result = await chrome.storage.sync.get(['privacyGuardSettings']);
+                const storedSettings = result.privacyGuardSettings;
+
+                if (storedSettings && storedSettings.enabled !== this.isEnabled) {
+                    this.onSettingsChanged(storedSettings);
+                }
+            } catch (error) {
+                console.warn('⚠️ 주기적 설정 확인 실패:', error);
+            }
+        }, 5000);
+    }
+
+    /**
+     * 설정 변경 처리
+     */
+    onSettingsChanged(newSettings) {
+        if (!newSettings) return;
+
+        const wasEnabled = this.isEnabled;
+        this.isEnabled = newSettings.enabled || false;
+        this.settings = { ...this.settings, ...newSettings };
+
+        console.log(`🔄 설정 변경 감지: ${this.isEnabled ? '활성화' : '비활성화'}`);
+
+        // 상태 변경에 따른 처리
+        if (wasEnabled !== this.isEnabled) {
+            if (!this.isEnabled) {
+                this.hideAllWarnings();
+            }
+
+            // demo-page에 상태 변경 알림
+            this.notifyDemoPage();
+        }
+    }
+
+    /**
+     * demo-page에 상태 알림
+     */
+    notifyDemoPage() {
+        try {
+            // demo-page가 현재 페이지인지 확인
+            if (window.location.pathname.includes('demo-page.html') ||
+                document.title.includes('Privacy Guard LLM - 실시간 시연')) {
+
+                window.postMessage({
+                    source: 'privacy-guard-extension',
+                    action: 'statusUpdate',
+                    enabled: this.isEnabled,
+                    settings: this.settings
+                }, '*');
+            }
+        } catch (error) {
+            console.warn('⚠️ demo-page 알림 실패:', error);
         }
     }
 
@@ -88,24 +193,28 @@ class PrivacyGuardContent {
      * DOM 관찰자 시작
      */
     startDOMObserver() {
-        // 기존 입력 요소들 스캔
-        this.scanForTextInputs();
+        try {
+            // 기존 입력 요소들 스캔
+            this.scanForTextInputs();
 
-        // MutationObserver로 동적 요소 감지
-        this.observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                mutation.addedNodes.forEach((node) => {
-                    if (node.nodeType === Node.ELEMENT_NODE) {
-                        this.scanElementForInputs(node);
-                    }
+            // MutationObserver로 동적 요소 감지
+            this.observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    mutation.addedNodes.forEach((node) => {
+                        if (node.nodeType === Node.ELEMENT_NODE) {
+                            this.scanElementForInputs(node);
+                        }
+                    });
                 });
             });
-        });
 
-        this.observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
+            this.observer.observe(document.body, {
+                childList: true,
+                subtree: true
+            });
+        } catch (error) {
+            console.warn('⚠️ DOM 관찰자 시작 실패:', error);
+        }
     }
 
     /**
@@ -121,9 +230,13 @@ class PrivacyGuardContent {
         ];
 
         selectors.forEach(selector => {
-            document.querySelectorAll(selector).forEach(element => {
-                this.addInputListener(element);
-            });
+            try {
+                document.querySelectorAll(selector).forEach(element => {
+                    this.addInputListener(element);
+                });
+            } catch (error) {
+                console.warn(`⚠️ 선택자 ${selector} 스캔 실패:`, error);
+            }
         });
     }
 
@@ -131,13 +244,17 @@ class PrivacyGuardContent {
      * 특정 요소에서 입력 요소 스캔
      */
     scanElementForInputs(element) {
-        if (this.isTextInput(element)) {
-            this.addInputListener(element);
-        }
+        try {
+            if (this.isTextInput(element)) {
+                this.addInputListener(element);
+            }
 
-        // 하위 요소들도 스캔
-        const inputs = element.querySelectorAll('textarea, input[type="text"], input[type="search"], [contenteditable="true"], [role="textbox"]');
-        inputs.forEach(input => this.addInputListener(input));
+            // 하위 요소들도 스캔
+            const inputs = element.querySelectorAll('textarea, input[type="text"], input[type="search"], [contenteditable="true"], [role="textbox"]');
+            inputs.forEach(input => this.addInputListener(input));
+        } catch (error) {
+            console.warn('⚠️ 요소 스캔 실패:', error);
+        }
     }
 
     /**
@@ -189,7 +306,7 @@ class PrivacyGuardContent {
         element.addEventListener('input', handleInput);
         element.addEventListener('keydown', handleKeyDown);
 
-        // 정리 함수 저장 (필요시 사용)
+        // 정리 함수 저장
         element._privacyGuardCleanup = () => {
             element.removeEventListener('input', handleInput);
             element.removeEventListener('keydown', handleKeyDown);
@@ -209,7 +326,7 @@ class PrivacyGuardContent {
             const result = await this.maskText(text);
 
             // 민감정보가 감지되면 시각적 경고
-            if (result.stats.totalEntities > 0) {
+            if (result.success && result.stats.totalEntities > 0) {
                 this.showInputWarning(element, result);
             } else {
                 this.hideInputWarning(element);
@@ -218,15 +335,12 @@ class PrivacyGuardContent {
             this.lastResult = result;
 
         } catch (error) {
-            console.warn('입력 분석 오류:', error);
+            console.warn('⚠️ 입력 분석 오류:', error);
         }
     }
 
-    async maskText(text) {
-        return await this.serverMaskText(text);
-    }
     /**
-     * 전송 시도 처리
+     * 전송 시도 처리 - 개선된 버전
      */
     async handleSendAttempt(element, event) {
         const text = this.getElementText(element);
@@ -235,7 +349,7 @@ class PrivacyGuardContent {
         try {
             const result = await this.maskText(text);
 
-            if (result.stats.totalEntities > 0) {
+            if (result.success && result.stats.totalEntities > 0) {
                 const action = await this.showSendWarningDialog(result);
 
                 switch (action) {
@@ -262,8 +376,24 @@ class PrivacyGuardContent {
             this.lastResult = result;
 
         } catch (error) {
-            console.error('전송 처리 오류:', error);
+            console.error('❌ 전송 처리 오류:', error);
             this.showToast('처리 중 오류가 발생했습니다', 'error');
+        }
+    }
+
+    /**
+     * 텍스트 마스킹
+     */
+    async maskText(text) {
+        try {
+            if (this.serverAvailable) {
+                return await this.serverMaskText(text);
+            } else {
+                return this.createFallbackResponse(text);
+            }
+        } catch (error) {
+            console.warn('⚠️ 마스킹 처리 실패:', error);
+            return this.createFallbackResponse(text);
         }
     }
 
@@ -298,6 +428,26 @@ class PrivacyGuardContent {
     }
 
     /**
+     * 기본 응답 생성 (서버 연결 실패 시)
+     */
+    createFallbackResponse(text) {
+        return {
+            success: false,
+            error: '서버에 연결할 수 없습니다',
+            originalText: text,
+            maskedText: text,
+            stats: {
+                totalEntities: 0,
+                maskedEntities: 0,
+                avgRisk: 0,
+                processingTime: 0
+            },
+            maskingLog: [],
+            timestamp: new Date().toISOString()
+        };
+    }
+
+    /**
      * 서버 결과 정규화
      */
     normalizeServerResult(serverResult) {
@@ -321,10 +471,51 @@ class PrivacyGuardContent {
      * 메시지 리스너 설정
      */
     setupMessageListeners() {
-        chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-            this.handleMessage(message, sender, sendResponse);
-            return true; // 비동기 응답
-        });
+        try {
+            // Chrome 확장 프로그램 메시지
+            if (chrome.runtime && chrome.runtime.onMessage) {
+                chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+                    this.handleMessage(message, sender, sendResponse);
+                    return true; // 비동기 응답
+                });
+            }
+
+            // demo-page와의 통신
+            window.addEventListener('message', (event) => {
+                if (event.source !== window || !event.data || event.data.source !== 'privacy-guard-demo') {
+                    return;
+                }
+
+                if (event.data.action === 'maskText') {
+                    this.handleDemoMaskRequest(event.data);
+                }
+            });
+        } catch (error) {
+            console.warn('⚠️ 메시지 리스너 설정 실패:', error);
+        }
+    }
+
+    /**
+     * demo-page 마스킹 요청 처리
+     */
+    async handleDemoMaskRequest(data) {
+        try {
+            const result = await this.maskText(data.text);
+
+            window.postMessage({
+                source: 'privacy-guard-extension',
+                action: 'maskTextResult',
+                messageId: data.messageId,
+                result: result
+            }, '*');
+        } catch (error) {
+            window.postMessage({
+                source: 'privacy-guard-extension',
+                action: 'maskTextResult',
+                messageId: data.messageId,
+                result: { success: false, error: error.message }
+            }, '*');
+        }
     }
 
     /**
@@ -343,15 +534,23 @@ class PrivacyGuardContent {
                     break;
 
                 case 'updateSettings':
-                    this.settings = { ...this.settings, ...message.settings };
+                    this.onSettingsChanged(message.settings);
                     sendResponse({ success: true });
+                    break;
+
+                case 'getStatus':
+                    sendResponse({
+                        success: true,
+                        enabled: this.isEnabled,
+                        settings: this.settings
+                    });
                     break;
 
                 default:
                     sendResponse({ success: false, error: '알 수 없는 액션' });
             }
         } catch (error) {
-            console.error('메시지 처리 오류:', error);
+            console.error('❌ 메시지 처리 오류:', error);
             sendResponse({ success: false, error: error.message });
         }
     }
@@ -372,41 +571,61 @@ class PrivacyGuardContent {
         if (!this.isEnabled) {
             this.hideAllWarnings();
         }
+
+        // demo-page에 상태 알림
+        this.notifyDemoPage();
     }
 
     /**
      * 헬퍼 함수들
      */
     getElementText(element) {
-        if (element.tagName.toLowerCase() === 'textarea' ||
-            (element.tagName.toLowerCase() === 'input' && element.type === 'text')) {
-            return element.value;
-        } else if (element.contentEditable === 'true') {
-            return element.innerText || element.textContent;
+        try {
+            if (element.tagName.toLowerCase() === 'textarea' ||
+                (element.tagName.toLowerCase() === 'input' && element.type === 'text')) {
+                return element.value;
+            } else if (element.contentEditable === 'true') {
+                return element.innerText || element.textContent;
+            }
+            return '';
+        } catch (error) {
+            console.warn('⚠️ 요소 텍스트 가져오기 실패:', error);
+            return '';
         }
-        return '';
     }
 
     setElementText(element, text) {
-        if (element.tagName.toLowerCase() === 'textarea' ||
-            (element.tagName.toLowerCase() === 'input' && element.type === 'text')) {
-            element.value = text;
-        } else if (element.contentEditable === 'true') {
-            element.innerText = text;
+        try {
+            if (element.tagName.toLowerCase() === 'textarea' ||
+                (element.tagName.toLowerCase() === 'input' && element.type === 'text')) {
+                element.value = text;
+            } else if (element.contentEditable === 'true') {
+                element.innerText = text;
+            }
+        } catch (error) {
+            console.warn('⚠️ 요소 텍스트 설정 실패:', error);
         }
     }
 
     showInputWarning(element, result) {
-        // 간단한 시각적 경고
-        element.style.borderColor = '#e74c3c';
-        element.style.boxShadow = '0 0 0 2px rgba(231, 76, 60, 0.2)';
-        element.title = `민감정보 ${result.stats.totalEntities}개 감지됨 (위험도: ${result.stats.avgRisk}%)`;
+        try {
+            // 간단한 시각적 경고
+            element.style.borderColor = '#e74c3c';
+            element.style.boxShadow = '0 0 0 2px rgba(231, 76, 60, 0.2)';
+            element.title = `민감정보 ${result.stats.totalEntities}개 감지됨 (위험도: ${result.stats.avgRisk}%)`;
+        } catch (error) {
+            console.warn('⚠️ 입력 경고 표시 실패:', error);
+        }
     }
 
     hideInputWarning(element) {
-        element.style.borderColor = '';
-        element.style.boxShadow = '';
-        element.title = '';
+        try {
+            element.style.borderColor = '';
+            element.style.boxShadow = '';
+            element.title = '';
+        } catch (error) {
+            console.warn('⚠️ 입력 경고 숨김 실패:', error);
+        }
     }
 
     hideAllWarnings() {
@@ -449,75 +668,67 @@ class PrivacyGuardContent {
      * 토스트 메시지 표시
      */
     showToast(message, type = 'info') {
-        // 기존 토스트 제거
-        const existingToast = document.querySelector('.privacy-guard-toast');
-        if (existingToast) {
-            existingToast.remove();
-        }
+        try {
+            // 기존 토스트 제거
+            const existingToast = document.querySelector('.privacy-guard-toast');
+            if (existingToast) {
+                existingToast.remove();
+            }
 
-        const toast = document.createElement('div');
-        toast.className = 'privacy-guard-toast';
-        toast.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: ${this.getToastColor(type)};
-            color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            z-index: 999999;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            font-size: 14px;
-            font-weight: 600;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            animation: slideInRight 0.3s ease;
-            max-width: 300px;
-            line-height: 1.4;
-        `;
-
-        // 아이콘 추가
-        const icon = this.getToastIcon(type);
-        toast.innerHTML = `${icon} ${message}`;
-
-        document.body.appendChild(toast);
-
-        // 자동 제거
-        setTimeout(() => {
-            toast.style.animation = 'slideOutRight 0.3s ease';
-            setTimeout(() => {
-                if (toast.parentNode) {
-                    toast.remove();
-                }
-            }, 300);
-        }, 4000);
-
-        // CSS 애니메이션 추가 (한 번만)
-        if (!document.querySelector('#privacy-guard-animations')) {
-            const style = document.createElement('style');
-            style.id = 'privacy-guard-animations';
-            style.textContent = `
-                @keyframes slideInRight {
-                    from {
-                        opacity: 0;
-                        transform: translateX(100%);
-                    }
-                    to {
-                        opacity: 1;
-                        transform: translateX(0);
-                    }
-                }
-                @keyframes slideOutRight {
-                    from {
-                        opacity: 1;
-                        transform: translateX(0);
-                    }
-                    to {
-                        opacity: 0;
-                        transform: translateX(100%);
-                    }
-                }
+            const toast = document.createElement('div');
+            toast.className = 'privacy-guard-toast';
+            toast.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: ${this.getToastColor(type)};
+                color: white;
+                padding: 12px 20px;
+                border-radius: 8px;
+                z-index: 999999;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                font-size: 14px;
+                font-weight: 600;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+                animation: slideInRight 0.3s ease;
+                max-width: 300px;
+                line-height: 1.4;
             `;
-            document.head.appendChild(style);
+
+            // 아이콘 추가
+            const icon = this.getToastIcon(type);
+            toast.innerHTML = `${icon} ${message}`;
+
+            document.body.appendChild(toast);
+
+            // 자동 제거
+            setTimeout(() => {
+                toast.style.animation = 'slideOutRight 0.3s ease';
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.remove();
+                    }
+                }, 300);
+            }, 4000);
+
+            // CSS 애니메이션 추가 (한 번만)
+            if (!document.querySelector('#privacy-guard-animations')) {
+                const style = document.createElement('style');
+                style.id = 'privacy-guard-animations';
+                style.textContent = `
+                    @keyframes slideInRight {
+                        from { opacity: 0; transform: translateX(100%); }
+                        to { opacity: 1; transform: translateX(0); }
+                    }
+                    @keyframes slideOutRight {
+                        from { opacity: 1; transform: translateX(0); }
+                        to { opacity: 0; transform: translateX(100%); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+        } catch (error) {
+            console.warn('⚠️ 토스트 표시 실패:', error);
         }
     }
 
@@ -554,23 +765,32 @@ class PrivacyGuardContent {
      * 정리 함수
      */
     cleanup() {
-        // MutationObserver 정리
-        if (this.observer) {
-            this.observer.disconnect();
-        }
-
-        // 모든 입력 요소 리스너 정리
-        this.textInputs.forEach(element => {
-            if (element._privacyGuardCleanup) {
-                element._privacyGuardCleanup();
+        try {
+            // MutationObserver 정리
+            if (this.observer) {
+                this.observer.disconnect();
             }
-        });
 
-        // 토스트 메시지 정리
-        const toasts = document.querySelectorAll('.privacy-guard-toast');
-        toasts.forEach(toast => toast.remove());
+            // 설정 동기화 정리
+            if (this.settingsUpdateInterval) {
+                clearInterval(this.settingsUpdateInterval);
+            }
 
-        console.log('🛡️ Privacy Guard 정리 완료');
+            // 모든 입력 요소 리스너 정리
+            this.textInputs.forEach(element => {
+                if (element._privacyGuardCleanup) {
+                    element._privacyGuardCleanup();
+                }
+            });
+
+            // 토스트 메시지 정리
+            const toasts = document.querySelectorAll('.privacy-guard-toast');
+            toasts.forEach(toast => toast.remove());
+
+            console.log('🛡️ Privacy Guard 정리 완료');
+        } catch (error) {
+            console.warn('⚠️ 정리 중 오류:', error);
+        }
     }
 }
 
@@ -578,43 +798,24 @@ class PrivacyGuardContent {
 let privacyGuard = null;
 
 // DOM 준비되면 초기화
+function initPrivacyGuard() {
+    try {
+        if (!privacyGuard) {
+            privacyGuard = new ImprovedPrivacyGuardContent();
+
+            // 전역으로 노출 (demo-page 호환성)
+            window.privacyGuardContent = privacyGuard;
+        }
+    } catch (error) {
+        console.error('❌ Privacy Guard 초기화 실패:', error);
+    }
+}
+
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initPrivacyGuard);
 } else {
     initPrivacyGuard();
 }
-
-function initPrivacyGuard() {
-    try {
-        if (!privacyGuard) {
-            privacyGuard = new PrivacyGuardContent();
-        }
-    } catch (error) {
-        console.error('Privacy Guard 초기화 실패:', error);
-    }
-}
-
-window.addEventListener('message', async (event) => {
-    if (event.source !== window || !event.data || event.data.source !== 'privacy-guard-demo') {
-        return;
-    }
-
-    if (event.data.action === 'maskText') {
-        chrome.runtime.sendMessage({
-            action: 'mask',
-            text: event.data.text,
-            options: event.data.options
-        }, (response) => {
-            window.postMessage({
-                source: 'privacy-guard-extension',
-                action: 'maskTextResult',
-                messageId: event.data.messageId, // ✅ 필수
-                result: response
-            });
-        });
-    }
-});
-
 
 // 페이지 언로드 시 정리
 window.addEventListener('beforeunload', () => {
@@ -626,9 +827,6 @@ window.addEventListener('beforeunload', () => {
 // 전역 에러 핸들러
 window.addEventListener('error', (event) => {
     if (event.error && event.error.message && event.error.message.includes('privacy')) {
-        console.error('Privacy Guard 오류:', event.error);
+        console.error('❌ Privacy Guard 오류:', event.error);
     }
 });
-
-// privacy-client.js와의 연동을 위한 전역 노출
-window.privacyGuardContent = privacyGuard;
