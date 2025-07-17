@@ -12,245 +12,550 @@
         }
 
         body {
-            width: 320px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #f8f9fa;
-        }
-
-        .header {
+            width: 350px;
+            min-height: 500px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            text-align: center;
-        }
-
-        .logo {
-            font-size: 24px;
-            margin-bottom: 8px;
-        }
-
-        .title {
-            font-size: 16px;
-            font-weight: 600;
+            color: #333;
         }
 
         .container {
+            padding: 0;
+            height: 100%;
+        }
+
+        /* Header */
+        .header {
+            background: rgba(255, 255, 255, 0.1);
             padding: 20px;
-            background: white;
+            text-align: center;
+            color: white;
         }
 
-        .toggle-section {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 20px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
-        }
-
-        .toggle-label {
+        .header h1 {
+            font-size: 18px;
             font-weight: 600;
-            color: #495057;
+            margin-bottom: 4px;
         }
 
-        .toggle {
+        .header p {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        /* Main Content */
+        .content {
+            background: white;
+            margin: 0;
+            padding: 20px;
+            min-height: 400px;
+        }
+
+        /* Status Section */
+        .status-section {
+            margin-bottom: 24px;
+        }
+
+        .status-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 16px;
+            border-left: 4px solid #667eea;
+        }
+
+        .status-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .status-title {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .status-toggle {
             position: relative;
             width: 50px;
-            height: 26px;
-            background: #ccc;
-            border-radius: 13px;
+            height: 28px;
+            background: #ddd;
+            border-radius: 14px;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: background 0.3s ease;
         }
 
-        .toggle.active {
-            background: #4CAF50;
+        .status-toggle.active {
+            background: #667eea;
         }
 
         .toggle-slider {
             position: absolute;
             top: 2px;
             left: 2px;
-            width: 22px;
-            height: 22px;
+            width: 24px;
+            height: 24px;
             background: white;
             border-radius: 50%;
-            transition: all 0.3s;
+            transition: transform 0.3s ease;
             box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
 
-        .toggle.active .toggle-slider {
-            transform: translateX(24px);
+        .status-toggle.active .toggle-slider {
+            transform: translateX(22px);
         }
 
-        .settings {
-            margin-bottom: 20px;
+        .status-info {
+            display: flex;
+            gap: 16px;
+            font-size: 12px;
         }
 
-        .setting-group {
-            margin-bottom: 15px;
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
         }
 
-        .setting-label {
-            display: block;
+        .info-value {
             font-weight: 600;
-            margin-bottom: 6px;
-            color: #495057;
+            font-size: 16px;
+            color: #667eea;
+            margin-bottom: 2px;
+        }
+
+        .info-label {
+            color: #666;
+        }
+
+        /* Server Status */
+        .server-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            padding: 8px 12px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+
+        .server-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #e74c3c;
+        }
+
+        .server-indicator.connected {
+            background: #2ed573;
+            animation: pulse 2s infinite;
+        }
+
+        .server-text {
+            font-size: 12px;
+            color: #666;
+            flex: 1;
+        }
+
+        .reconnect-btn {
+            background: none;
+            border: none;
+            color: #667eea;
+            font-size: 12px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: background 0.2s ease;
+        }
+
+        .reconnect-btn:hover {
+            background: #f8f9fa;
+        }
+
+        /* Controls Section */
+        .controls-section {
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-weight: 600;
             font-size: 14px;
+            margin-bottom: 12px;
+            color: #333;
+        }
+
+        .control-group {
+            margin-bottom: 16px;
+        }
+
+        .control-label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 6px;
         }
 
         .slider-container {
-            display: flex;
-            align-items: center;
-            gap: 10px;
+            position: relative;
         }
 
-        input[type="range"] {
-            flex: 1;
+        .slider {
+            width: 100%;
             height: 6px;
-            background: #ddd;
             border-radius: 3px;
+            background: #e9ecef;
             outline: none;
             appearance: none;
         }
 
-        input[type="range"]::-webkit-slider-thumb {
+        .slider::-webkit-slider-thumb {
             appearance: none;
             width: 18px;
             height: 18px;
-            background: #667eea;
             border-radius: 50%;
+            background: #667eea;
             cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
         }
 
-        .threshold-value {
-            min-width: 30px;
-            text-align: center;
-            font-weight: bold;
+        .slider-value {
+            position: absolute;
+            right: 0;
+            top: -20px;
+            font-size: 12px;
+            font-weight: 600;
             color: #667eea;
         }
 
-        select {
-            width: 100%;
-            padding: 8px 12px;
-            border: 1px solid #ced4da;
-            border-radius: 6px;
-            font-size: 14px;
-            background: white;
-        }
-
-        .actions {
+        .mode-selector {
             display: flex;
-            gap: 10px;
+            gap: 8px;
         }
 
-        .btn {
+        .mode-option {
             flex: 1;
-            padding: 12px 20px;
+            padding: 8px 12px;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            background: white;
+            font-size: 12px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .mode-option.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        /* Actions Section */
+        .actions-section {
+            margin-bottom: 20px;
+        }
+
+        .action-btn {
+            width: 100%;
+            padding: 12px;
             border: none;
             border-radius: 8px;
+            font-size: 14px;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s;
-            font-size: 14px;
+            transition: all 0.2s ease;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
         }
 
-        .btn.primary {
-            background: linear-gradient(45deg, #667eea, #764ba2);
+        .btn-primary {
+            background: #667eea;
             color: white;
         }
 
-        .btn.secondary {
-            background: #6c757d;
-            color: white;
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #333;
+            border: 1px solid #e9ecef;
         }
 
-        .btn:hover {
+        .action-btn:hover {
             transform: translateY(-1px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
 
-        .stats {
-            margin-top: 20px;
-            padding: 15px;
-            background: #e3f2fd;
-            border-radius: 8px;
+        .action-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Results Section */
+        .results-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 16px;
             display: none;
         }
 
-        .stats.show {
+        .results-section.show {
             display: block;
         }
 
-        .stat-row {
+        .result-header {
             display: flex;
             justify-content: space-between;
-            margin: 5px 0;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .result-title {
+            font-weight: 600;
             font-size: 14px;
         }
 
-        .stat-label {
-            color: #495057;
+        .result-time {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .result-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .stat-item {
+            text-align: center;
+            background: white;
+            padding: 12px 8px;
+            border-radius: 8px;
         }
 
         .stat-value {
-            font-weight: bold;
+            font-weight: 600;
+            font-size: 18px;
             color: #667eea;
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #666;
+        }
+
+        .entity-details {
+            background: white;
+            border-radius: 8px;
+            padding: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .entity-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .entity-item:last-child {
+            border-bottom: none;
+        }
+
+        .entity-type {
+            background: #667eea;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .entity-text {
+            flex: 1;
+            margin: 0 8px;
+            font-size: 12px;
+            color: #333;
+        }
+
+        .entity-risk {
+            font-size: 11px;
+            font-weight: 600;
+            color: #e74c3c;
+        }
+
+        /* Loading State */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            color: #666;
+        }
+
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #e9ecef;
+            border-top: 2px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 16px;
+            color: #666;
+            font-size: 11px;
+            border-top: 1px solid #e9ecef;
+        }
+
+        /* Animations */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .slide-in {
+            animation: slideIn 0.3s ease;
         }
     </style>
 </head>
 <body>
-<div class="header">
-    <div class="logo">🛡️</div>
-    <div class="title">Privacy Guard LLM</div>
-</div>
-
 <div class="container">
-    <div class="toggle-section">
-        <span class="toggle-label">보호 기능</span>
-        <div class="toggle" id="mainToggle">
-            <div class="toggle-slider"></div>
-        </div>
+    <!-- Header -->
+    <div class="header">
+        <h1>🛡️ Privacy Guard LLM</h1>
+        <p>의료 데이터 개인정보 보호</p>
     </div>
 
-    <div class="settings">
-        <div class="setting-group">
-            <label class="setting-label">마스킹 임계값</label>
-            <div class="slider-container">
-                <input type="range" id="threshold" min="10" max="100" value="50">
-                <span class="threshold-value" id="thresholdValue">50</span>
+    <!-- Main Content -->
+    <div class="content">
+        <!-- Status Section -->
+        <div class="status-section">
+            <div class="status-card">
+                <div class="status-header">
+                    <span class="status-title">보호 상태</span>
+                    <div class="status-toggle" id="statusToggle">
+                        <div class="toggle-slider"></div>
+                    </div>
+                </div>
+
+                <div class="status-info">
+                    <div class="info-item">
+                        <div class="info-value" id="detectedCount">0</div>
+                        <div class="info-label">감지됨</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-value" id="maskedCount">0</div>
+                        <div class="info-label">마스킹됨</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-value" id="riskLevel">0%</div>
+                        <div class="info-label">위험도</div>
+                    </div>
+                </div>
+
+                <div class="server-status" id="serverStatus">
+                    <div class="server-indicator" id="serverIndicator"></div>
+                    <span class="server-text" id="serverText">서버 연결 확인 중...</span>
+                    <button class="reconnect-btn" id="reconnectBtn">재연결</button>
+                </div>
             </div>
         </div>
 
-        <div class="setting-group">
-            <label class="setting-label">분석 모드</label>
-            <select id="analysisMode">
-                <option value="medical">의료 특화</option>
-                <option value="general">일반</option>
-                <option value="strict">엄격</option>
-            </select>
+        <!-- Controls Section -->
+        <div class="controls-section">
+            <h3 class="section-title">설정</h3>
+
+            <div class="control-group">
+                <label class="control-label">민감도 임계값</label>
+                <div class="slider-container">
+                    <input type="range" class="slider" id="thresholdSlider"
+                           min="10" max="100" value="50" step="5">
+                    <span class="slider-value" id="thresholdValue">50</span>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label class="control-label">분석 모드</label>
+                <div class="mode-selector">
+                    <div class="mode-option active" data-mode="medical">의료</div>
+                    <div class="mode-option" data-mode="general">일반</div>
+                    <div class="mode-option" data-mode="strict">엄격</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions Section -->
+        <div class="actions-section">
+            <h3 class="section-title">작업</h3>
+
+            <button class="action-btn btn-primary" id="scanBtn">
+                🔍 현재 페이지 스캔
+            </button>
+
+            <button class="action-btn btn-secondary" id="testBtn">
+                🧪 연결 테스트
+            </button>
+        </div>
+
+        <!-- Results Section -->
+        <div class="results-section" id="resultsSection">
+            <div class="result-header">
+                <span class="result-title">스캔 결과</span>
+                <span class="result-time" id="resultTime"></span>
+            </div>
+
+            <div class="result-stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="totalEntities">0</div>
+                    <div class="stat-label">총 개체</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="maskedEntities">0</div>
+                    <div class="stat-label">마스킹됨</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="avgRisk">0%</div>
+                    <div class="stat-label">평균 위험도</div>
+                </div>
+            </div>
+
+            <div class="entity-details" id="entityDetails"></div>
         </div>
     </div>
 
-    <div class="actions">
-
-        <button class="btn secondary" id="clearButton">🧹 초기화</button>
-    </div>
-
-    <div class="stats" id="stats">
-        <div class="stat-row">
-            <span class="stat-label">감지된 개체:</span>
-            <span class="stat-value" id="totalEntities">0</span>
-        </div>
-        <div class="stat-row">
-            <span class="stat-label">마스킹됨:</span>
-            <span class="stat-value" id="maskedEntities">0</span>
-        </div>
-        <div class="stat-row">
-            <span class="stat-label">평균 위험도:</span>
-            <span class="stat-value" id="avgRisk">0</span>
-        </div>
+    <!-- Footer -->
+    <div class="footer">
+        Privacy Guard LLM v1.0 | 의료 AI 개인정보 보호
     </div>
 </div>
 

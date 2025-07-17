@@ -1,329 +1,315 @@
-// masking-engine.js - Python API 연동 + JavaScript Fallback
+// extension/masking-engine.js
+// 간소화된 마스킹 엔진 - 서버 우선, 클라이언트 최소화
 
-class PrivacyGuardEngine {
+class MaskingEngine {
     constructor() {
-        this.threshold = 50;
-        this.analysisMode = 'medical';
-        this.enabled = false;
-
-        // API 설정
         this.apiEndpoint = 'http://localhost:8000';
-        this.usePythonAPI = true;
-        this.serverStatus = 'unknown'; // 'connected', 'disconnected', 'unknown'
-
-        // JavaScript Fallback용 패턴들 (기존 코드 유지)
-        this.medicalPatterns = {
-            name: /[가-힣]{2,4}(?=\s|님|씨|선생님|교수님|$)/g,
-            phone: /010-\d{4}-\d{4}/g,
-            age: /\d{1,2}세|\d{1,2}살/g,
-            hospital: /(서울대병원|삼성서울병원|연세의료원|아산병원|세브란스|고려대병원|[가-힣]+병원|[가-힣]+의료원|[가-힣]+센터)/g,
-            disease: /(간암|백혈병|고혈압|당뇨|폐암|위암|대장암|유방암|갑상선암|심근경색|뇌졸중|치매|파킨슨)/g,
-            treatment: /(수술|입원|퇴원|처방|투약|치료|진료|검사|진단)/g,
-            date: /\d{4}년\s*\d{1,2}월|\d{1,2}월\s*\d{1,2}일|\d{4}-\d{1,2}-\d{1,2}/g,
-            doctor: /([가-힣]{2,4})\s*(의사|교수님|선생님|간호사)/g
+        this.isServerConnected = false;
+        this.settings = {
+            threshold: 50,
+            mode: 'medical',
+            enabled: false
         };
 
-        this.riskWeights = {
-            name: 100, phone: 100, hospital: 65, disease: 52,
-            date: 78, doctor: 95, age: 30, treatment: 40
-        };
-
-        this.maskPatterns = {
-            name: '[PERSON]', phone: '[CONTACT]', hospital: '[HOSPITAL]',
-            disease: '[DISEASE]', date: '[DATE]', doctor: '[PERSON]',
-            age: '[AGE]', treatment: '[TREATMENT]'
-        };
-
-        this.contextualKeywords = {
-            '진단': 1.2, '수술': 1.2, '입원': 1.2, '치료': 1.2,
-            '암': 1.3, '종양': 1.3, '질환': 1.3, '응급': 1.5, '중환자': 1.5
-        };
-
-        // 서버 상태 체크
-        this.checkServerStatus();
+        this.init();
     }
 
-    // 🔥 새로운 기능: 서버 상태 체크
+    async init() {
+        await this.checkServerStatus();
+        this.startPeriodicHealthCheck();
+        console.log('🎭 Masking Engine 초기화 완료');
+    }
+
+    /**
+     * 서버 상태 확인
+     */
     async checkServerStatus() {
         try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
+
             const response = await fetch(`${this.apiEndpoint}/health`, {
                 method: 'GET',
-                timeout: 3000
+                signal: controller.signal
             });
 
-            if (response.ok) {
-                const data = await response.json();
-                this.serverStatus = 'connected';
-                console.log('✅ Python 서버 연결됨:', data);
-                return true;
+            clearTimeout(timeoutId);
+            this.isServerConnected = response.ok;
+
+            if (this.isServerConnected) {
+                console.log('✅ 서버 연결 성공');
+            } else {
+                console.warn('⚠️ 서버 응답 오류');
             }
+
+            return this.isServerConnected;
         } catch (error) {
-            this.serverStatus = 'disconnected';
-            console.warn('⚠️ Python 서버 연결 실패, JavaScript 버전 사용:', error.message);
+            this.isServerConnected = false;
+            console.warn('⚠️ 서버 연결 실패:', error.message);
+            return false;
         }
-        return false;
     }
 
-    // 🔥 새로운 기능: Python API 호출
-    async callPythonAPI(text) {
+    /**
+     * 주기적 서버 상태 체크
+     */
+    startPeriodicHealthCheck() {
+        setInterval(() => {
+            if (!this.isServerConnected) {
+                this.checkServerStatus();
+            }
+        }, 30000); // 30초마다
+    }
+
+    /**
+     * 메인 마스킹 처리 함수
+     */
+    async process(text, options = {}) {
+        if (!text || text.trim().length === 0) {
+            return this.createEmptyResult(text);
+        }
+
+        const requestSettings = {
+            text: text.trim(),
+            threshold: options.threshold || this.settings.threshold,
+            mode: options.mode || this.settings.mode,
+            use_contextual_analysis: true
+        };
+
+        console.log(`🚀 마스킹 처리 시작: ${text.length}자`);
+
+        // 서버 연결 확인
+        if (!this.isServerConnected) {
+            await this.checkServerStatus();
+        }
+
+        if (!this.isServerConnected) {
+            return this.createErrorResult(text, '서버에 연결할 수 없습니다');
+        }
+
         try {
-            const requestData = {
-                text: text,
-                threshold: this.threshold,
-                mode: this.analysisMode,
-                use_contextual_analysis: true
-            };
+            const result = await this.callServerAPI(requestSettings);
+            console.log(`✅ 처리 완료: ${result.stats.maskedEntities}/${result.stats.totalEntities} 마스킹`);
+            return result;
+        } catch (error) {
+            console.error('❌ 마스킹 처리 실패:', error);
+            this.isServerConnected = false;
+            return this.createErrorResult(text, error.message);
+        }
+    }
 
-            console.log('🐍 Python API 호출 중...', requestData);
+    /**
+     * 서버 API 호출
+     */
+    async callServerAPI(settings) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
 
+        try {
             const response = await fetch(`${this.apiEndpoint}/api/mask`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
+                    'Content-Type': 'application/json'
                 },
-                body: JSON.stringify(requestData)
+                body: JSON.stringify(settings),
+                signal: controller.signal
             });
+
+            clearTimeout(timeoutId);
 
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
-            const result = await response.json();
+            const data = await response.json();
 
-            if (result.success) {
-                console.log('✅ Python API 성공:', result.stats);
-
-                // Python 결과를 JavaScript 형식으로 변환
-                return {
-                    originalText: result.original_text,
-                    maskedText: result.masked_text,
-                    entities: this.convertPythonEntities(result.masking_log),
-                    maskedEntities: result.stats.masked_entities,
-                    totalEntities: result.stats.total_entities,
-                    maskingLog: result.masking_log,
-                    avgRisk: Math.round(result.stats.avg_risk),
-                    processingTime: result.stats.processing_time,
-                    source: 'python',
-                    modelInfo: result.model_info
-                };
+            if (data.success) {
+                return this.normalizeServerResponse(data);
             } else {
-                throw new Error(result.error || 'Python API 처리 실패');
+                throw new Error(data.error || '서버 처리 실패');
             }
 
         } catch (error) {
-            console.error('❌ Python API 오류:', error);
+            clearTimeout(timeoutId);
+            if (error.name === 'AbortError') {
+                throw new Error('요청 시간 초과');
+            }
             throw error;
         }
     }
 
-    // Python 응답을 JavaScript 형식으로 변환
-    convertPythonEntities(maskingLog) {
+    /**
+     * 서버 응답 정규화
+     */
+    normalizeServerResponse(serverData) {
+        return {
+            success: true,
+            originalText: serverData.original_text || '',
+            maskedText: serverData.masked_text || '',
+            stats: {
+                totalEntities: serverData.stats?.total_entities || 0,
+                maskedEntities: serverData.stats?.masked_entities || 0,
+                avgRisk: serverData.stats?.avg_risk || 0,
+                processingTime: serverData.stats?.processing_time || 0
+            },
+            entities: this.convertMaskingLog(serverData.masking_log || []),
+            maskingLog: serverData.masking_log || [],
+            modelInfo: serverData.model_info,
+            source: 'server',
+            timestamp: new Date().toISOString()
+        };
+    }
+
+    /**
+     * 마스킹 로그를 엔티티 형식으로 변환
+     */
+    convertMaskingLog(maskingLog) {
         return maskingLog.map((log, index) => ({
             id: index,
             token: log.token,
             type: log.entity,
-            finalRisk: log.risk_weight,
+            risk: log.risk_weight,
             masked: log.masked_as
         }));
     }
 
-    // 🔥 수정된 메인 처리 함수
-    async process(text) {
-        console.log('🚀 Privacy Guard 파이프라인 시작');
-        console.log(`📊 설정: 임계값=${this.threshold}, 모드=${this.analysisMode}`);
-
-        // 1. Python API 우선 시도
-        if (this.usePythonAPI && this.serverStatus !== 'disconnected') {
-            try {
-                const result = await this.callPythonAPI(text);
-                console.log('🐍 Python 모델 사용 완료');
-                return result;
-            } catch (error) {
-                console.warn('⚠️ Python API 실패, JavaScript로 fallback:', error.message);
-                this.serverStatus = 'disconnected';
-                // JavaScript 버전으로 계속 진행
-            }
+    /**
+     * 빠른 분석 (실시간 경고용)
+     */
+    async quickAnalyze(text) {
+        if (!text || text.length < 5) {
+            return { hasRisk: false, riskLevel: 0, entityCount: 0 };
         }
 
-        // 2. JavaScript Fallback 처리
-        console.log('⚡ JavaScript 버전 사용');
-        return this.processWithJavaScript(text);
+        try {
+            const result = await this.process(text);
+
+            if (result.success) {
+                return {
+                    hasRisk: result.stats.totalEntities > 0,
+                    riskLevel: result.stats.avgRisk,
+                    entityCount: result.stats.totalEntities,
+                    detectedItems: result.entities || []
+                };
+            } else {
+                return { hasRisk: false, riskLevel: 0, error: result.error };
+            }
+        } catch (error) {
+            console.warn('빠른 분석 실패:', error);
+            return { hasRisk: false, riskLevel: 0, error: error.message };
+        }
     }
 
-    // 기존 JavaScript 처리 로직 (이름만 변경)
-    processWithJavaScript(text) {
-        console.log('⚡ JavaScript 파이프라인 시작');
-
-        // 1단계: 개체명 인식
-        const entities = this.detectEntities(text);
-        console.log(`🔍 1단계 - 감지된 개체: ${entities.length}개`);
-
-        if (entities.length === 0) {
-            return {
-                originalText: text,
-                maskedText: text,
-                entities: [],
-                maskedEntities: 0,
+    /**
+     * 빈 결과 생성
+     */
+    createEmptyResult(text) {
+        return {
+            success: true,
+            originalText: text || '',
+            maskedText: text || '',
+            stats: {
                 totalEntities: 0,
-                maskingLog: [],
+                maskedEntities: 0,
                 avgRisk: 0,
-                source: 'javascript'
+                processingTime: 0
+            },
+            entities: [],
+            maskingLog: [],
+            source: 'empty',
+            timestamp: new Date().toISOString()
+        };
+    }
+
+    /**
+     * 오류 결과 생성
+     */
+    createErrorResult(text, errorMessage) {
+        return {
+            success: false,
+            originalText: text || '',
+            maskedText: text || '',
+            error: errorMessage,
+            stats: {
+                totalEntities: 0,
+                maskedEntities: 0,
+                avgRisk: 0,
+                processingTime: 0
+            },
+            entities: [],
+            maskingLog: [],
+            source: 'error',
+            timestamp: new Date().toISOString()
+        };
+    }
+
+    /**
+     * 설정 업데이트
+     */
+    updateSettings(newSettings) {
+        this.settings = { ...this.settings, ...newSettings };
+        console.log('⚙️ 마스킹 엔진 설정 업데이트:', this.settings);
+    }
+
+    /**
+     * 상태 정보 반환
+     */
+    getStatus() {
+        return {
+            serverConnected: this.isServerConnected,
+            endpoint: this.apiEndpoint,
+            settings: this.settings,
+            lastCheck: new Date().toISOString()
+        };
+    }
+
+    /**
+     * 수동 재연결
+     */
+    async reconnect() {
+        console.log('🔄 서버 재연결 시도...');
+        const success = await this.checkServerStatus();
+        return success;
+    }
+
+    /**
+     * 서버 테스트
+     */
+    async testConnection() {
+        console.log('🧪 연결 테스트 시작...');
+
+        try {
+            // Health check
+            const healthOk = await this.checkServerStatus();
+            if (!healthOk) {
+                throw new Error('Health check 실패');
+            }
+
+            // 간단한 테스트 요청
+            const testResult = await this.process('테스트 메시지입니다');
+
+            console.log('✅ 연결 테스트 성공');
+            return {
+                success: true,
+                message: '서버 연결 및 처리 테스트 완료',
+                result: testResult
+            };
+
+        } catch (error) {
+            console.error('❌ 연결 테스트 실패:', error);
+            return {
+                success: false,
+                message: error.message,
+                error: error
             };
         }
-
-        // 2단계: Copula 위험도 분석
-        const copulaEntities = this.calculateCopulaRisk(entities);
-        console.log('📊 2단계 - Copula 위험도 계산 완료');
-
-        // 3단계: 문맥적 위험 분석
-        const contextualEntities = this.analyzeContextualRisk(text, copulaEntities);
-        console.log('🔄 3단계 - 문맥적 위험 분석 완료');
-
-        // 4단계: 마스킹 실행
-        const result = this.executeMasking(text, contextualEntities);
-        console.log(`🎭 4단계 - 마스킹 완료: ${result.maskedEntities}/${result.totalEntities}`);
-
-        return {
-            ...result,
-            source: 'javascript'
-        };
-    }
-
-    // 기존 JavaScript 메서드들 (동일)
-    detectEntities(text) {
-        const entities = [];
-        let entityId = 0;
-
-        for (const [type, pattern] of Object.entries(this.medicalPatterns)) {
-            let match;
-            while ((match = pattern.exec(text)) !== null) {
-                entities.push({
-                    id: entityId++,
-                    token: match[0],
-                    type: type,
-                    start: match.index,
-                    end: match.index + match[0].length,
-                    baseRisk: this.riskWeights[type] || 0
-                });
-            }
-        }
-
-        return entities;
-    }
-
-    calculateCopulaRisk(entities) {
-        const combinations = {
-            'name+hospital+date': 1.8,
-            'name+disease+hospital': 2.0,
-            'name+phone': 2.0,
-            'hospital+date+disease': 1.3
-        };
-
-        const entityTypes = entities.map(e => e.type);
-        let combinationMultiplier = 1.0;
-
-        for (const [combo, multiplier] of Object.entries(combinations)) {
-            const comboTypes = combo.split('+');
-            if (comboTypes.every(type => entityTypes.includes(type))) {
-                combinationMultiplier = Math.max(combinationMultiplier, multiplier);
-            }
-        }
-
-        return entities.map(entity => ({
-            ...entity,
-            copulaRisk: Math.min(100, entity.baseRisk * combinationMultiplier)
-        }));
-    }
-
-    analyzeContextualRisk(text, entities) {
-        let contextMultiplier = 1.0;
-
-        for (const [keyword, multiplier] of Object.entries(this.contextualKeywords)) {
-            if (text.includes(keyword)) {
-                contextMultiplier = Math.max(contextMultiplier, multiplier);
-            }
-        }
-
-        return entities.map(entity => ({
-            ...entity,
-            finalRisk: Math.min(100, Math.round(entity.copulaRisk * contextMultiplier))
-        }));
-    }
-
-    executeMasking(text, entities) {
-        let maskedText = text;
-        let maskedCount = 0;
-        const maskingLog = [];
-
-        const sortedEntities = entities
-            .filter(e => e.finalRisk >= this.threshold)
-            .sort((a, b) => b.finalRisk - a.finalRisk);
-
-        for (let i = sortedEntities.length - 1; i >= 0; i--) {
-            const entity = sortedEntities[i];
-            const maskPattern = this.maskPatterns[entity.type] || '[MASKED]';
-
-            maskedText = maskedText.substring(0, entity.start) +
-                maskPattern +
-                maskedText.substring(entity.end);
-
-            maskedCount++;
-            maskingLog.push({
-                token: entity.token,
-                type: entity.type,
-                risk: entity.finalRisk,
-                masked: maskPattern
-            });
-        }
-
-        return {
-            originalText: text,
-            maskedText: maskedText,
-            entities: entities,
-            maskedEntities: maskedCount,
-            totalEntities: entities.length,
-            maskingLog: maskingLog,
-            avgRisk: entities.length > 0 ?
-                Math.round(entities.reduce((sum, e) => sum + e.finalRisk, 0) / entities.length) : 0
-        };
-    }
-
-    // 🔥 새로운 기능: 서버 상태 정보
-    getServerStatus() {
-        return {
-            status: this.serverStatus,
-            endpoint: this.apiEndpoint,
-            usePythonAPI: this.usePythonAPI
-        };
-    }
-
-    // 🔥 새로운 기능: 수동 서버 재연결
-    async reconnectServer() {
-        console.log('🔄 서버 재연결 시도...');
-        const connected = await this.checkServerStatus();
-        return connected;
-    }
-
-    // 설정 업데이트 (기존과 동일)
-    updateSettings(settings) {
-        this.threshold = settings.threshold || this.threshold;
-        this.analysisMode = settings.mode || this.analysisMode;
-        this.enabled = settings.enabled !== undefined ? settings.enabled : this.enabled;
-
-        console.log('⚙️ 설정 업데이트:', {
-            threshold: this.threshold,
-            mode: this.analysisMode,
-            enabled: this.enabled
-        });
     }
 }
 
-// 전역 인스턴스
-window.privacyGuard = new PrivacyGuardEngine();
+// 전역 인스턴스 생성
+window.maskingEngine = new MaskingEngine();
 
-// 서버 상태 체크 (주기적)
-setInterval(() => {
-    if (window.privacyGuard.serverStatus === 'disconnected') {
-        window.privacyGuard.checkServerStatus();
-    }
-}, 30000); // 30초마다 체크
+// 기존 privacyGuard와의 호환성을 위한 별칭
+window.privacyGuard = window.maskingEngine;
+
+console.log('🎭 Masking Engine 로드 완료');
