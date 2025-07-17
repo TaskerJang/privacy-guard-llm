@@ -1,5 +1,5 @@
 // extension/core/privacy-client.js
-// 개선된 서버 기반 개인정보 보호 클라이언트
+// 폴백 제거된 서버 전용 개인정보 보호 클라이언트
 
 class PrivacyClient {
     constructor() {
@@ -11,27 +11,27 @@ class PrivacyClient {
         this.settings = {
             threshold: 50,
             mode: 'medical',
-            autoRetry: true,
-            timeout: 5000
+            timeout: 10000,
+            retryInterval: 5000
         };
 
         // 요청 캐시 (동일한 텍스트 재분석 방지)
         this.cache = new Map();
-        this.cacheMaxSize = 100;
+        this.cacheMaxSize = 50;
         this.cacheTimeout = 300000; // 5분
 
         this.init();
     }
 
     async init() {
-        console.log('🔗 Privacy Client 초기화 중...');
+        console.log('🔗 Privacy Client 초기화 중 (서버 전용 모드)...');
         await this.checkServerConnection();
         this.startHealthCheck();
         this.setupCacheCleanup();
     }
 
     /**
-     * 서버 연결 상태 확인 (개선된 버전)
+     * 서버 연결 상태 확인
      */
     async checkServerConnection() {
         try {
@@ -56,6 +56,7 @@ class PrivacyClient {
                 this.connectionAttempts = 0;
 
                 console.log(`✅ 서버 연결 성공: ${data.status || 'healthy'}`);
+                console.log(`🤖 모델 정보: ${data.model_info?.name || 'Unknown'} v${data.model_info?.version || 'Unknown'}`);
 
                 // 서버 정보 저장
                 this.serverInfo = data;
@@ -69,9 +70,9 @@ class PrivacyClient {
             this.connectionAttempts++;
 
             if (error.name === 'AbortError') {
-                console.warn(`⏱️ 서버 연결 시간 초과 (시도: ${this.connectionAttempts})`);
+                console.error(`⏱️ 서버 연결 시간 초과 (시도: ${this.connectionAttempts}/${this.maxRetries})`);
             } else {
-                console.warn(`❌ 서버 연결 실패: ${error.message} (시도: ${this.connectionAttempts})`);
+                console.error(`❌ 서버 연결 실패: ${error.message} (시도: ${this.connectionAttempts}/${this.maxRetries})`);
             }
 
             return false;
@@ -79,21 +80,27 @@ class PrivacyClient {
     }
 
     /**
-     * 주기적 서버 상태 체크 (개선된 버전)
+     * 주기적 서버 상태 체크
      */
     startHealthCheck() {
         setInterval(async () => {
-            if (!this.isServerConnected && this.connectionAttempts < this.maxRetries) {
-                await this.checkServerConnection();
-            } else if (this.isServerConnected) {
+            if (!this.isServerConnected) {
+                if (this.connectionAttempts < this.maxRetries) {
+                    console.log(`🔄 서버 재연결 시도 (${this.connectionAttempts + 1}/${this.maxRetries})`);
+                    await this.checkServerConnection();
+                } else {
+                    console.error(`🚫 최대 재시도 횟수 초과. 서버를 확인해주세요.`);
+                }
+            } else {
                 // 연결된 상태에서도 주기적 체크
                 const isHealthy = await this.quickHealthCheck();
                 if (!isHealthy) {
+                    console.warn('⚠️ 서버 연결이 끊어졌습니다. 재연결을 시도합니다.');
                     this.isServerConnected = false;
                     this.connectionAttempts = 0;
                 }
             }
-        }, 30000); // 30초마다
+        }, this.settings.retryInterval);
     }
 
     /**
@@ -102,7 +109,7 @@ class PrivacyClient {
     async quickHealthCheck() {
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 2000);
+            const timeoutId = setTimeout(() => controller.abort(), 3000);
 
             const response = await fetch(`${this.apiEndpoint}/health`, {
                 method: 'GET',
@@ -118,7 +125,7 @@ class PrivacyClient {
     }
 
     /**
-     * 텍스트 마스킹 처리 (메인 API - 개선된 버전)
+     * 텍스트 마스킹 처리 (서버 전용)
      */
     async maskText(text, options = {}) {
         if (!text || text.trim().length === 0) {
@@ -139,6 +146,12 @@ class PrivacyClient {
             }
         }
 
+        // 서버 연결 필수 확인
+        if (!this.isServerConnected) {
+            console.error('🚫 서버에 연결되지 않았습니다. 로컬 처리가 비활성화되어 있습니다.');
+            return this.createServerErrorResult(cleanText, '서버에 연결되지 않았습니다. 서버를 시작하고 다시 시도해주세요.');
+        }
+
         const requestData = {
             text: cleanText,
             threshold: options.threshold || this.settings.threshold,
@@ -147,37 +160,27 @@ class PrivacyClient {
             request_id: this.generateRequestId()
         };
 
-        console.log(`🚀 마스킹 요청: ${cleanText.length}자, 모드: ${requestData.mode}`);
-
-        let result;
+        console.log(`🚀 서버 마스킹 요청: ${cleanText.length}자, 모드: ${requestData.mode}`);
 
         try {
-            // 서버 연결 확인 및 재시도
-            if (!this.isServerConnected) {
-                await this.checkServerConnection();
-            }
+            const result = await this.serverMaskText(requestData);
+            console.log(`✅ 서버 마스킹 완료: ${result.stats.maskedEntities}/${result.stats.totalEntities} 개체 (모델: ${result.modelInfo?.name || 'Unknown'})`);
 
-            if (this.isServerConnected) {
-                result = await this.serverMaskText(requestData);
-                console.log(`✅ 서버 마스킹 완료: ${result.stats.maskedEntities}/${result.stats.totalEntities} 개체`);
-            } else {
-                throw new Error('서버에 연결할 수 없습니다');
-            }
+            // 결과 캐싱
+            this.setCacheResult(cacheKey, result);
+
+            return result;
 
         } catch (error) {
-            console.warn('❌ 서버 마스킹 실패, 로컬로 전환:', error.message);
+            console.error('❌ 서버 마스킹 실패:', error.message);
             this.isServerConnected = false;
-            result = await this.localMaskText(requestData);
+
+            return this.createServerErrorResult(cleanText, `서버 처리 실패: ${error.message}`);
         }
-
-        // 결과 캐싱
-        this.setCacheResult(cacheKey, result);
-
-        return result;
     }
 
     /**
-     * 서버 기반 마스킹
+     * 서버 기반 마스킹 (유일한 처리 방법)
      */
     async serverMaskText(requestData) {
         const controller = new AbortController();
@@ -221,142 +224,6 @@ class PrivacyClient {
     }
 
     /**
-     * 로컬 마스킹 (개선된 fallback)
-     */
-    async localMaskText(requestData) {
-        const text = requestData.text;
-        const startTime = performance.now();
-
-        // 향상된 패턴 정의
-        const patterns = [
-            // 개인명 (더 정확한 패턴)
-            {
-                regex: /[가-힣]{2,4}(?=\s*(?:님|씨|환자|의사|선생님|간호사|박사))/g,
-                type: 'person',
-                risk: 85,
-                mask: '[이름]'
-            },
-            // 연락처 (다양한 형태)
-            {
-                regex: /(?:010|011|016|017|018|019)[-\s]?\d{3,4}[-\s]?\d{4}/g,
-                type: 'phone',
-                risk: 95,
-                mask: '[연락처]'
-            },
-            // 주민번호
-            {
-                regex: /\d{6}[-\s]?[1-4]\d{6}/g,
-                type: 'id_number',
-                risk: 100,
-                mask: '[주민번호]'
-            },
-            // 의료기관 (확장된 패턴)
-            {
-                regex: /(서울대병원|서울대학교병원|서울대학교의과대학부속병원|삼성서울병원|아산병원|아산의료원|세브란스|연세의료원|고려대병원|고려대학교의료원|[가-힣]+대학교?병원|[가-힣]+병원|[가-힣]+의료원|[가-힣]+보건소)/g,
-                type: 'hospital',
-                risk: 70,
-                mask: '[의료기관]'
-            },
-            // 질병명 (확장된 리스트)
-            {
-                regex: /(간암|폐암|위암|대장암|유방암|췌장암|뇌종양|혈액암|백혈병|당뇨병?|고혈압|심장병|뇌졸중|치매|파킨슨병|우울증|조현병|양극성장애)/g,
-                type: 'disease',
-                risk: 60,
-                mask: '[질병명]'
-            },
-            // 날짜 (다양한 형태)
-            {
-                regex: /(?:\d{4}[-\.\/]\d{1,2}[-\.\/]\d{1,2}|\d{4}년\s*\d{1,2}월\s*\d{1,2}일|\d{1,2}\/\d{1,2}\/\d{4})/g,
-                type: 'date',
-                risk: 40,
-                mask: '[날짜]'
-            },
-            // 나이
-            {
-                regex: /(?:\d{1,3}세|\d{1,3}살)/g,
-                type: 'age',
-                risk: 30,
-                mask: '[나이]'
-            },
-            // 주소 (기본 패턴)
-            {
-                regex: /[가-힣]+(?:시|구|군|동|로|길)\s*\d+[-\d]*/g,
-                type: 'address',
-                risk: 50,
-                mask: '[주소]'
-            }
-        ];
-
-        const detected = [];
-        let maskedText = text;
-        let totalRisk = 0;
-
-        // 패턴 매칭 및 중복 제거
-        patterns.forEach(pattern => {
-            const matches = [...text.matchAll(pattern.regex)];
-            matches.forEach(match => {
-                // 중복 체크 (겹치는 범위 확인)
-                const isOverlap = detected.some(existing =>
-                    !(match.index >= existing.end || match.index + match[0].length <= existing.start)
-                );
-
-                if (!isOverlap) {
-                    detected.push({
-                        text: match[0],
-                        type: pattern.type,
-                        risk: pattern.risk,
-                        mask: pattern.mask,
-                        start: match.index,
-                        end: match.index + match[0].length
-                    });
-                    totalRisk += pattern.risk;
-                }
-            });
-        });
-
-        // 마스킹 적용 (뒤에서부터 적용하여 인덱스 오류 방지)
-        detected
-            .sort((a, b) => b.start - a.start)
-            .forEach(item => {
-                maskedText = maskedText.substring(0, item.start) +
-                    item.mask +
-                    maskedText.substring(item.end);
-            });
-
-        const processingTime = performance.now() - startTime;
-        const avgRisk = detected.length > 0 ? Math.round(totalRisk / detected.length) : 0;
-
-        const result = {
-            success: true,
-            originalText: text,
-            maskedText: maskedText,
-            stats: {
-                totalEntities: detected.length,
-                maskedEntities: detected.length,
-                avgRisk: avgRisk,
-                processingTime: Math.round(processingTime)
-            },
-            maskingLog: detected.map(item => ({
-                token: item.text,
-                entity: item.type,
-                risk_weight: item.risk,
-                masked_as: item.mask,
-                start_pos: item.start,
-                end_pos: item.end
-            })),
-            modelInfo: {
-                type: 'local_pattern',
-                version: '2.0.0',
-                patterns_used: patterns.length
-            },
-            timestamp: new Date().toISOString()
-        };
-
-        console.log(`🔧 로컬 마스킹 완료: ${result.stats.maskedEntities}개 개체, ${processingTime.toFixed(1)}ms`);
-        return result;
-    }
-
-    /**
      * 결과 정규화
      */
     normalizeResult(serverResult, source = 'server') {
@@ -371,7 +238,12 @@ class PrivacyClient {
                 processingTime: serverResult.stats?.processing_time || 0
             },
             maskingLog: serverResult.masking_log || [],
-            modelInfo: serverResult.model_info || { type: source },
+            modelInfo: {
+                name: serverResult.model_info?.name || 'Unknown',
+                version: serverResult.model_info?.version || 'Unknown',
+                type: serverResult.model_info?.type || 'neural_network',
+                source: source
+            },
             timestamp: new Date().toISOString()
         };
 
@@ -393,15 +265,20 @@ class PrivacyClient {
                 processingTime: 0
             },
             maskingLog: [],
-            modelInfo: { type: 'empty' },
+            modelInfo: {
+                name: 'N/A',
+                version: 'N/A',
+                type: 'empty',
+                source: 'client'
+            },
             timestamp: new Date().toISOString()
         };
     }
 
     /**
-     * 오류 결과 생성
+     * 서버 오류 결과 생성
      */
-    createErrorResult(text, errorMessage) {
+    createServerErrorResult(text, errorMessage) {
         return {
             success: false,
             originalText: text || '',
@@ -414,17 +291,32 @@ class PrivacyClient {
                 processingTime: 0
             },
             maskingLog: [],
-            modelInfo: { type: 'error' },
+            modelInfo: {
+                name: 'Error',
+                version: 'N/A',
+                type: 'error',
+                source: 'client'
+            },
             timestamp: new Date().toISOString()
         };
     }
 
     /**
-     * 빠른 분석 (실시간 경고용)
+     * 빠른 분석 (실시간 경고용) - 서버 전용
      */
     async quickAnalyze(text) {
         if (!text || text.length < 10) {
-            return { hasRisk: false, riskLevel: 0, entityCount: 0 };
+            return { hasRisk: false, riskLevel: 0, entityCount: 0, usingServer: false };
+        }
+
+        if (!this.isServerConnected) {
+            return {
+                hasRisk: false,
+                riskLevel: 0,
+                entityCount: 0,
+                error: '서버에 연결되지 않았습니다',
+                usingServer: false
+            };
         }
 
         try {
@@ -433,11 +325,19 @@ class PrivacyClient {
                 hasRisk: result.stats.totalEntities > 0,
                 riskLevel: result.stats.avgRisk,
                 entityCount: result.stats.totalEntities,
-                processingTime: result.stats.processingTime
+                processingTime: result.stats.processingTime,
+                usingServer: true,
+                modelInfo: result.modelInfo
             };
         } catch (error) {
             console.warn('빠른 분석 실패:', error);
-            return { hasRisk: false, riskLevel: 0, entityCount: 0, error: error.message };
+            return {
+                hasRisk: false,
+                riskLevel: 0,
+                entityCount: 0,
+                error: error.message,
+                usingServer: false
+            };
         }
     }
 
@@ -504,8 +404,10 @@ class PrivacyClient {
             endpoint: this.apiEndpoint,
             settings: this.settings,
             connectionAttempts: this.connectionAttempts,
+            maxRetries: this.maxRetries,
             cacheSize: this.cache.size,
-            serverInfo: this.serverInfo || null
+            serverInfo: this.serverInfo || null,
+            fallbackEnabled: false // 폴백 비활성화 명시
         };
     }
 
@@ -513,9 +415,17 @@ class PrivacyClient {
      * 수동 재연결
      */
     async reconnect() {
-        console.log('🔄 서버 재연결 시도...');
+        console.log('🔄 서버 수동 재연결 시도...');
         this.connectionAttempts = 0;
-        return await this.checkServerConnection();
+        const result = await this.checkServerConnection();
+
+        if (result) {
+            console.log('✅ 수동 재연결 성공');
+        } else {
+            console.error('❌ 수동 재연결 실패');
+        }
+
+        return result;
     }
 
     /**
@@ -527,10 +437,26 @@ class PrivacyClient {
     }
 
     /**
+     * 서버 연결 필수 확인
+     */
+    requireServerConnection() {
+        if (!this.isServerConnected) {
+            throw new Error('이 기능을 사용하려면 서버에 연결되어야 합니다. localhost:8000에서 서버를 시작해주세요.');
+        }
+    }
+
+    /**
      * 연결 상태 getter
      */
     get isConnected() {
         return this.isServerConnected;
+    }
+
+    /**
+     * 서버 정보 getter
+     */
+    get modelInfo() {
+        return this.serverInfo?.model_info || { name: 'Unknown', version: 'Unknown' };
     }
 }
 
@@ -541,5 +467,6 @@ if (typeof window !== 'undefined') {
     // 디버깅을 위한 전역 노출
     window.PrivacyClient = PrivacyClient;
 
-    console.log('🛡️ Privacy Client 로드 완료');
+    console.log('🛡️ Privacy Client 로드 완료 (서버 전용 모드)');
+    console.log('📋 폴백 기능: 비활성화됨 - 서버 연결 필수');
 }

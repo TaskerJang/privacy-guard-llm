@@ -222,6 +222,9 @@ class PrivacyGuardContent {
         }
     }
 
+    async maskText(text) {
+        return await this.serverMaskText(text);
+    }
     /**
      * 전송 시도 처리
      */
@@ -265,24 +268,6 @@ class PrivacyGuardContent {
     }
 
     /**
-     * 텍스트 마스킹 (서버 또는 로컬)
-     */
-    async maskText(text) {
-        // 서버 시도
-        if (this.serverAvailable) {
-            try {
-                return await this.serverMaskText(text);
-            } catch (error) {
-                console.warn('서버 마스킹 실패, 로컬로 전환:', error);
-                this.serverAvailable = false;
-            }
-        }
-
-        // 로컬 fallback
-        return this.localMaskText(text);
-    }
-
-    /**
      * 서버 기반 마스킹
      */
     async serverMaskText(text) {
@@ -310,69 +295,6 @@ class PrivacyGuardContent {
         }
 
         return this.normalizeServerResult(result);
-    }
-
-    /**
-     * 로컬 마스킹 (fallback)
-     */
-    localMaskText(text) {
-        const patterns = [
-            { regex: /[가-힣]{2,4}(?=님|씨|환자|의사|선생님)/g, type: '이름', risk: 85, mask: '[이름]' },
-            { regex: /010-\d{4}-\d{4}/g, type: '연락처', risk: 95, mask: '[연락처]' },
-            { regex: /\d{6}-[1-4]\d{6}/g, type: '주민번호', risk: 100, mask: '[주민번호]' },
-            { regex: /(서울대병원|서울대학교병원|삼성서울병원|아산병원|세브란스|연세의료원|고려대병원|[가-힣]+병원|[가-힣]+의료원)/g, type: '의료기관', risk: 70, mask: '[의료기관]' },
-            { regex: /(간암|폐암|위암|대장암|유방암|당뇨병?|고혈압|심장병|뇌종양|백혈병)/g, type: '질병명', risk: 60, mask: '[질병명]' },
-            { regex: /\d{4}년\s*\d{1,2}월\s*\d{1,2}일|\d{4}-\d{1,2}-\d{1,2}/g, type: '날짜', risk: 40, mask: '[날짜]' }
-        ];
-
-        const detected = [];
-        let maskedText = text;
-        let totalRisk = 0;
-
-        patterns.forEach(pattern => {
-            const matches = [...text.matchAll(pattern.regex)];
-            matches.forEach(match => {
-                detected.push({
-                    text: match[0],
-                    type: pattern.type,
-                    risk: pattern.risk,
-                    mask: pattern.mask,
-                    start: match.index,
-                    end: match.index + match[0].length
-                });
-                totalRisk += pattern.risk;
-            });
-        });
-
-        // 마스킹 적용 (뒤에서부터)
-        detected
-            .sort((a, b) => b.start - a.start)
-            .forEach(item => {
-                maskedText = maskedText.substring(0, item.start) +
-                    item.mask +
-                    maskedText.substring(item.end);
-            });
-
-        const avgRisk = detected.length > 0 ? Math.round(totalRisk / detected.length) : 0;
-
-        return {
-            success: true,
-            originalText: text,
-            maskedText: maskedText,
-            stats: {
-                totalEntities: detected.length,
-                maskedEntities: detected.length,
-                avgRisk: avgRisk,
-                processingTime: 0
-            },
-            maskingLog: detected.map(item => ({
-                token: item.text,
-                entity: item.type,
-                risk_weight: item.risk,
-                masked_as: item.mask
-            })),
-            timestamp: new Date().toISOString()
-        };
     }
 
     /**
@@ -671,6 +593,28 @@ function initPrivacyGuard() {
         console.error('Privacy Guard 초기화 실패:', error);
     }
 }
+
+window.addEventListener('message', async (event) => {
+    if (event.source !== window || !event.data || event.data.source !== 'privacy-guard-demo') {
+        return;
+    }
+
+    if (event.data.action === 'maskText') {
+        chrome.runtime.sendMessage({
+            action: 'mask',
+            text: event.data.text,
+            options: event.data.options
+        }, (response) => {
+            window.postMessage({
+                source: 'privacy-guard-extension',
+                action: 'maskTextResult',
+                messageId: event.data.messageId, // ✅ 필수
+                result: response
+            });
+        });
+    }
+});
+
 
 // 페이지 언로드 시 정리
 window.addEventListener('beforeunload', () => {
